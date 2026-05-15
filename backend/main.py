@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status, Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -226,7 +226,7 @@ def read_db(db_name: str, current_user: models.User = Depends(get_current_user))
     return get_json_db(db_name, current_user.username)
 
 @app.post("/api/db/{db_name}")
-def write_db(db_name: str, data: dict | list, current_user: models.User = Depends(get_current_user)):
+def write_db(db_name: str, data: dict | list = Body(...), current_user: models.User = Depends(get_current_user)):
     if current_user.role != "superadmin":
         user_permissions = json.loads(current_user.permissions_json)
         if db_name not in user_permissions:
