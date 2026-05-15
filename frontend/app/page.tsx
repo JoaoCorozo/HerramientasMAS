@@ -3,12 +3,14 @@
 import { useState } from "react"
 import { Zap } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
+import { useAuth } from "@/components/auth-provider"
 import { FileUploadCard } from "@/components/file-upload-card"
 import { ResultsPanel } from "@/components/results-panel"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 export default function Home() {
+  const { token } = useAuth()
   const [reportType, setReportType] = useState("diferencias")
   
   // Archivo 1
@@ -58,6 +60,7 @@ export default function Home() {
 
       const response = await fetch("http://127.0.0.1:8000/api/comparador", {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
         body: formData
       })
       

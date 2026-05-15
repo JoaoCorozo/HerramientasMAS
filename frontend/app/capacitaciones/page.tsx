@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { BookOpen, Plus, Trash2, ExternalLink, Search, Clock, Calendar } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
+import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,6 +34,7 @@ interface Capacitacion {
 }
 
 export default function CapacitacionesPage() {
+  const { token } = useAuth()
   const [capacitaciones, setCapacitaciones] = useState<Capacitacion[]>([])
   const [filtered, setFiltered] = useState<Capacitacion[]>([])
   const [search, setSearch] = useState("")
@@ -46,8 +48,8 @@ export default function CapacitacionesPage() {
   const [date, setDate] = useState("")
 
   useEffect(() => {
-    fetchCapacitaciones()
-  }, [])
+    if (token) fetchCapacitaciones()
+  }, [token])
 
   useEffect(() => {
     if (!search) {
@@ -66,7 +68,10 @@ export default function CapacitacionesPage() {
 
   const fetchCapacitaciones = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/db/capacitaciones")
+      if (!token) return
+      const res = await fetch("http://127.0.0.1:8000/api/db/capacitaciones", {
+        headers: { Authorization: `Bearer ${token}` }
+      })
       const data = await res.json()
       setCapacitaciones(data || [])
     } catch (e) {
@@ -78,7 +83,10 @@ export default function CapacitacionesPage() {
     try {
       await fetch("http://127.0.0.1:8000/api/db/capacitaciones", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify(newData),
       })
       setCapacitaciones(newData)

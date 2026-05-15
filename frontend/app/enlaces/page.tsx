@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Link2, Plus, Trash2, Search, Edit2, ExternalLink } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
+import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,6 +26,7 @@ interface Enlace {
 }
 
 export default function EnlacesPage() {
+  const { token } = useAuth()
   const [enlaces, setEnlaces] = useState<Enlace[]>([])
   const [filtered, setFiltered] = useState<Enlace[]>([])
   const [search, setSearch] = useState("")
@@ -39,8 +41,8 @@ export default function EnlacesPage() {
   const [notes, setNotes] = useState("")
 
   useEffect(() => {
-    fetchEnlaces()
-  }, [])
+    if (token) fetchEnlaces()
+  }, [token])
 
   useEffect(() => {
     let result = enlaces
@@ -66,7 +68,10 @@ export default function EnlacesPage() {
 
   const fetchEnlaces = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/db/enlaces")
+      if (!token) return
+      const res = await fetch("http://127.0.0.1:8000/api/db/enlaces", {
+        headers: { Authorization: `Bearer ${token}` }
+      })
       const data = await res.json()
       
       // Retrocompatibilidad (por si guardó "category" antes de este fix)
@@ -85,7 +90,10 @@ export default function EnlacesPage() {
     try {
       await fetch("http://127.0.0.1:8000/api/db/enlaces", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify(newData),
       })
       setEnlaces(newData)

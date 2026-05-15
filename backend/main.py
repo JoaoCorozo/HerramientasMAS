@@ -1,12 +1,20 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import json
 import os
 import csv
 from datetime import datetime
 import openpyxl
+
+from database import engine, get_db, Base
+import models
+import auth
+
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Herramientas API")
 
@@ -18,6 +26,124 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+@app.on_event("startup")
+def startup_event():
+    db = next(get_db())
+    admin_user = db.query(models.User).filter(models.User.username == "admin").first()
+    if not admin_user:
+        hashed_pw = auth.get_password_hash("admin123")
+        admin_user = models.User(
+            username="admin", 
+            hashed_password=hashed_pw, 
+            role="superadmin", 
+            permissions_json='["comparador", "rut", "textos", "capacitaciones", "enlaces", "recordatorios"]'
+        )
+        db.add(admin_user)
+        db.commit()
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    payload = auth.decode_access_token(token)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication credentials")
+    username: str = payload.get("sub")
+    if username is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication credentials")
+    user = db.query(models.User).filter(models.User.username == username).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+def require_permission(module_name: str):
+    def permission_checker(current_user: models.User = Depends(get_current_user)):
+        if current_user.role == "superadmin":
+            return current_user
+        user_permissions = json.loads(current_user.permissions_json)
+        if module_name not in user_permissions:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+        return current_user
+    return permission_checker
+
+@app.post("/api/auth/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    if not user or not auth.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    
+    access_token = auth.create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/api/auth/me")
+def read_users_me(current_user: models.User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "role": current_user.role,
+        "permissions": json.loads(current_user.permissions_json)
+    }
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str
+    permissions: list[str]
+
+@app.get("/api/users")
+def get_users(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="Not superadmin")
+    users = db.query(models.User).all()
+    return [{"id": u.id, "username": u.username, "role": u.role, "permissions": json.loads(u.permissions_json)} for u in users]
+
+@app.post("/api/users")
+def create_user(user: UserCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="Not superadmin")
+    if db.query(models.User).filter(models.User.username == user.username).first():
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    hashed_password = auth.get_password_hash(user.password)
+    db_user = models.User(
+        username=user.username,
+        hashed_password=hashed_password,
+        role=user.role,
+        permissions_json=json.dumps(user.permissions)
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return {"id": db_user.id, "username": db_user.username}
+
+@app.put("/api/users/{user_id}")
+def update_user(user_id: int, user: UserCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="Not superadmin")
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    db_user.username = user.username
+    if user.password:
+        db_user.hashed_password = auth.get_password_hash(user.password)
+    db_user.role = user.role
+    db_user.permissions_json = json.dumps(user.permissions)
+    db.commit()
+    return {"status": "updated"}
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="Not superadmin")
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if db_user.username == "admin":
+        raise HTTPException(status_code=400, detail="Cannot delete default admin")
+    db.delete(db_user)
+    db.commit()
+    return {"status": "deleted"}
+
 # === RUTAS PARA NORMALIZADOR DE RUT ===
 class RutInput(BaseModel):
     ruts: str
@@ -25,7 +151,7 @@ class RutInput(BaseModel):
     k_minuscula: bool
 
 @app.post("/api/rut/normalizar")
-def normalizar_rut(data: RutInput):
+def normalizar_rut(data: RutInput, current_user: models.User = Depends(require_permission("rut"))):
     ruts_limpios = data.ruts.replace("'", "").replace('"', "").replace('\r', '')
     lista_ruts = [r.strip() for r in ruts_limpios.split('\n') if r.strip()]
     
@@ -60,7 +186,7 @@ class NombresInput(BaseModel):
     formato: str
 
 @app.post("/api/nombres/normalizar")
-def normalizar_nombres(data: NombresInput):
+def normalizar_nombres(data: NombresInput, current_user: models.User = Depends(require_permission("textos"))):
     nombres_limpios = data.nombres.replace("'", "").replace('"', "").replace('\r', '')
     lista_nombres = [n.strip() for n in nombres_limpios.split('\n') if n.strip()]
     
@@ -74,8 +200,8 @@ def normalizar_nombres(data: NombresInput):
 
 
 # === CRUD JSON ===
-def get_db(db_name: str):
-    path = f"{db_name}_db.json"
+def get_json_db(db_name: str, username: str):
+    path = f"{username}_{db_name}_db.json"
     if not os.path.exists(path):
         return {} if db_name == "recordatorios" else []
     try:
@@ -84,22 +210,30 @@ def get_db(db_name: str):
     except:
         return {} if db_name == "recordatorios" else []
 
-def save_db(db_name: str, data):
-    path = f"{db_name}_db.json"
+def save_db(db_name: str, username: str, data):
+    path = f"{username}_{db_name}_db.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
 @app.get("/api/db/{db_name}")
-def read_db(db_name: str):
+def read_db(db_name: str, current_user: models.User = Depends(get_current_user)):
+    if current_user.role != "superadmin":
+        user_permissions = json.loads(current_user.permissions_json)
+        if db_name not in user_permissions:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
     if db_name not in ["capacitaciones", "enlaces", "recordatorios"]:
         raise HTTPException(status_code=404, detail="DB not found")
-    return get_db(db_name)
+    return get_json_db(db_name, current_user.username)
 
 @app.post("/api/db/{db_name}")
-def write_db(db_name: str, data: dict | list):
+def write_db(db_name: str, data: dict | list, current_user: models.User = Depends(get_current_user)):
+    if current_user.role != "superadmin":
+        user_permissions = json.loads(current_user.permissions_json)
+        if db_name not in user_permissions:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
     if db_name not in ["capacitaciones", "enlaces", "recordatorios"]:
         raise HTTPException(status_code=404, detail="DB not found")
-    save_db(db_name, data)
+    save_db(db_name, current_user.username, data)
     return {"status": "success"}
 
 # === COMPARADOR DE DATOS ===
@@ -136,7 +270,7 @@ def extraer_excel(path, col_ini_letra, col_fin_letra, fila_ini, fila_fin, hoja_n
     return usuarios, row_map
 
 @app.post("/api/excel/hojas")
-async def get_excel_hojas(file: UploadFile = File(...)):
+async def get_excel_hojas(file: UploadFile = File(...), current_user: models.User = Depends(require_permission("comparador"))):
     try:
         path = f"temp_{file.filename}"
         with open(path, "wb") as f: f.write(await file.read())
@@ -149,7 +283,7 @@ async def get_excel_hojas(file: UploadFile = File(...)):
         return {"hojas": []}
 
 @app.post("/api/abrir-ruta")
-async def abrir_ruta_local(req: Request):
+async def abrir_ruta_local(req: Request, current_user: models.User = Depends(require_permission("recordatorios"))):
     try:
         data = await req.json()
         ruta = data.get("ruta", "")
@@ -174,7 +308,8 @@ async def api_comparar(
     c_fin2: str = Form(""),
     f_ini2: int = Form(2),
     f_fin2: str = Form(""),
-    hoja2: str = Form("Activa (Por defecto)")
+    hoja2: str = Form("Activa (Por defecto)"),
+    current_user: models.User = Depends(require_permission("comparador"))
 ):
     try:
         path1 = f"temp_{file1.filename}"

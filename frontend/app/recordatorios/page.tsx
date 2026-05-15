@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Calendar as CalendarIcon, CheckCircle2, Circle, Plus, Trash2, ChevronLeft, ChevronRight, FileText } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
+import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,6 +29,7 @@ interface Recordatorio {
 type RecordatoriosDB = Record<string, Recordatorio[]>
 
 export default function RecordatoriosPage() {
+  const { token } = useAuth()
   const [db, setDb] = useState<RecordatoriosDB>({})
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0])
@@ -43,12 +45,15 @@ export default function RecordatoriosPage() {
   const [ruta, setRuta] = useState("")
 
   useEffect(() => {
-    fetchRecordatorios()
-  }, [])
+    if (token) fetchRecordatorios()
+  }, [token])
 
   const fetchRecordatorios = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/db/recordatorios")
+      if (!token) return
+      const res = await fetch("http://127.0.0.1:8000/api/db/recordatorios", {
+        headers: { Authorization: `Bearer ${token}` }
+      })
       const data = await res.json()
       setDb(data || {})
     } catch (e) {
@@ -60,7 +65,10 @@ export default function RecordatoriosPage() {
     try {
       await fetch("http://127.0.0.1:8000/api/db/recordatorios", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify(newDb),
       })
       setDb(newDb)
@@ -241,7 +249,10 @@ export default function RecordatoriosPage() {
     try {
       await fetch("http://127.0.0.1:8000/api/abrir-ruta", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify({ ruta })
       })
     } catch (err) {

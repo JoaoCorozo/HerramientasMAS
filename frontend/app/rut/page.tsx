@@ -3,11 +3,13 @@
 import { useState } from "react"
 import { FileText, Copy, Play } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
+import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Checkbox } from "@/components/ui/checkbox"
 
 export default function RutPage() {
+  const { token } = useAuth()
   const [formato, setFormato] = useState("Formato Original (Normalizado)")
   const [kMinuscula, setKMinuscula] = useState(false)
   const [inputText, setInputText] = useState("")
@@ -23,7 +25,8 @@ export default function RutPage() {
       const response = await fetch("http://127.0.0.1:8000/api/rut/normalizar", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
           ruts: inputText,
