@@ -1,0 +1,80 @@
+[
+    {
+        "title": "HERRAMIENTAS ENAEX",
+        "url": "https://enaexacademy.enaex.com/portal_v3/app_adm/index.php",
+        "empresa": "ENAEX",
+        "notes": ""
+    },
+    {
+        "title": "HERRAMIENTAS ENAEX BRASIL",
+        "url": "https://enaexacademybrasil.enaex.com/portal_v3/app_adm/index.php",
+        "empresa": "ENAEX",
+        "notes": ""
+    },
+    {
+        "title": "ADM CURSOS ENAEX",
+        "url": "https://enaexacademy.enaex.com/course/management.php",
+        "empresa": "ENAEX",
+        "notes": ""
+    },
+    {
+        "title": "HERRAMIENTA PARA EVALUACIONES",
+        "url": "https://apps.grupomasconsultores.cl/evaluaciones/",
+        "empresa": "GENERAL",
+        "notes": ""
+    },
+    {
+        "title": "ADM SITIO BEX",
+        "url": "https://www.gestiondepersonasbex.cl/admin/search.php",
+        "empresa": "BEX",
+        "notes": ""
+    },
+    {
+        "title": "LOGIN BI",
+        "url": "https://plataformaavanza.interconecta2.cl/login/index.php?saml=off",
+        "empresa": "BI",
+        "notes": ""
+    },
+    {
+        "title": "REPORTES BEX",
+        "url": "https://www.gestiondepersonasbex.cl/portal/adm_reportes.php",
+        "empresa": "BEX",
+        "notes": ""
+    },
+    {
+        "title": "ADM HABITAT",
+        "url": "https://personas.afphabitat.cl/generico/index.php",
+        "empresa": "HABITAT",
+        "notes": ""
+    },
+    {
+        "title": "HERRAMIENTAS BI",
+        "url": "https://plataformaavanza.interconecta2.cl/portal/app_adm/index.php",
+        "empresa": "BI",
+        "notes": ""
+    },
+    {
+        "title": "HERRAMIENTAS BEX",
+        "url": "https://www.gestiondepersonasbex.cl/portal/app_adm/index.php?clear=1",
+        "empresa": "",
+        "notes": ""
+    },
+    {
+        "title": "APP CORREOS BI",
+        "url": "https://plataformaavanza.interconecta2.cl/api/mail_composer.php",
+        "empresa": "BI",
+        "notes": ""
+    },
+    {
+        "title": "CARGAR USUARIOS INDUCCION BEX",
+        "url": "https://www.gestiondepersonasbex.cl/admin/tool/uploaduser/index.php",
+        "empresa": "BEX",
+        "notes": ""
+    },
+    {
+        "title": "LOGIN AZA",
+        "url": "https://login.azacapacita.cl/simplesaml/module.php/core/loginuserpass.php?AuthState=_cc63ee931fbbf53f5063f927fe29af0e057a76b1db%3Ahttps%3A%2F%2Flogin.azacapacita.cl%2Fsimplesaml%2Fsaml2%2Fidp%2FSSOService.php%3Fspentityid%3Dhttps%253A%252F%252Fwww.azacapacita.cl%252Fauth%252Fsaml2%252Fsp%252Fmetadata.php%26RelayState%3Dhttps%253A%252F%252Fwww.azacapacita.cl%252Flogin%252Findex.php%253Fsaml%253Don%26cookieTime%3D1778686594",
+        "empresa": "AZA",
+        "notes": ""
+    }
+]

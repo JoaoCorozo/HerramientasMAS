@@ -1,0 +1,26 @@
+# Entornos virtuales Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Next.js / Node
+node_modules/
+.next/
+out/
+build/
+.DS_Store
+
+# Archivos locales de entorno de Next
+.env*.local
+
+# Dependencias npm debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos de caché
+.vercel/
+.turbo/
