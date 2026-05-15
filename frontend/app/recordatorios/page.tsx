@@ -47,6 +47,7 @@ export default function RecordatoriosPage() {
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false)
   
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [rutaCopied, setRutaCopied] = useState<number | null>(null)
   
   // Formulario
   const [titulo, setTitulo] = useState("")
@@ -63,7 +64,7 @@ export default function RecordatoriosPage() {
   const fetchRecordatorios = async () => {
     try {
       if (!token) return
-      const res = await fetch("http://127.0.0.1:8000/api/db/recordatorios", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/recordatorios`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store"
       })
@@ -77,7 +78,7 @@ export default function RecordatoriosPage() {
   const saveRecordatorios = async (newDb: RecordatoriosDB) => {
     try {
       if (!token) return
-      const res = await fetch("http://127.0.0.1:8000/api/db/recordatorios", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/recordatorios`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -264,20 +265,16 @@ export default function RecordatoriosPage() {
     }
   }
 
-  const handleAbrirRuta = async (ruta: string, e: React.MouseEvent) => {
+  const handleCopiarRuta = async (ruta: string, idx: number, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!ruta) return alert("No hay ruta definida")
     try {
-      await fetch("http://127.0.0.1:8000/api/abrir-ruta", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ ruta })
-      })
+      await navigator.clipboard.writeText(ruta)
+      setRutaCopied(idx)
+      setTimeout(() => setRutaCopied(null), 2000)
     } catch (err) {
-      console.error(err)
+      console.error('Failed to copy text: ', err)
+      alert("Error al copiar la ruta")
     }
   }
 
@@ -473,11 +470,11 @@ export default function RecordatoriosPage() {
                   <div className="absolute bottom-3 right-3 flex items-center gap-2">
                     {evt.ruta && (
                       <button 
-                        onClick={(e) => handleAbrirRuta(evt.ruta, e)}
+                        onClick={(e) => handleCopiarRuta(evt.ruta, idx, e)}
                         className="text-xs flex items-center gap-1 font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 px-2 py-1 rounded transition-colors"
-                        title="Abrir ubicación en Windows"
+                        title="Copiar ruta"
                       >
-                        Abrir Ruta
+                        {rutaCopied === idx ? "¡Copiado!" : "Copiar Ruta"}
                       </button>
                     )}
                   </div>

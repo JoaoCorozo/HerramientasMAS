@@ -69,7 +69,7 @@ export default function CapacitacionesPage() {
   const fetchCapacitaciones = async () => {
     try {
       if (!token) return
-      const res = await fetch("http://127.0.0.1:8000/api/db/capacitaciones", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/capacitaciones`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       const data = await res.json()
@@ -81,7 +81,7 @@ export default function CapacitacionesPage() {
 
   const saveCapacitaciones = async (newData: Capacitacion[]) => {
     try {
-      await fetch("http://127.0.0.1:8000/api/db/capacitaciones", {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/capacitaciones`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

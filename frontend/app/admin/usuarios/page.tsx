@@ -30,7 +30,7 @@ export default function UsuariosPage() {
   const fetchUsers = async () => {
     if (!token) return
     try {
-      const res = await fetch("http://localhost:8000/api/users", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/users`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (res.ok) {
@@ -58,7 +58,7 @@ export default function UsuariosPage() {
       permissions
     }
 
-    const url = isEditing ? `http://localhost:8000/api/users/${currentId}` : "http://localhost:8000/api/users"
+    const url = isEditing ? `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/users/${currentId}` : `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/users`
     const method = isEditing ? "PUT" : "POST"
 
     try {
@@ -87,7 +87,7 @@ export default function UsuariosPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("¿Eliminar usuario?")) return
     try {
-      const res = await fetch(`http://localhost:8000/api/users/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/users/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       })

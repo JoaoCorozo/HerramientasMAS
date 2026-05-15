@@ -200,40 +200,52 @@ def normalizar_nombres(data: NombresInput, current_user: models.User = Depends(r
 
 
 # === CRUD JSON ===
-def get_json_db(db_name: str, username: str):
-    path = f"{username}_{db_name}_db.json"
-    if not os.path.exists(path):
-        return {} if db_name == "recordatorios" else []
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return {} if db_name == "recordatorios" else []
+def get_json_db(db_name: str, username: str, db_session: Session):
+    record = db_session.query(models.AppData).filter(
+        models.AppData.username == username,
+        models.AppData.module_name == db_name
+    ).first()
+    
+    if record and record.payload_json:
+        try:
+            return json.loads(record.payload_json)
+        except:
+            pass
+    return {} if db_name == "recordatorios" else []
 
-def save_db(db_name: str, username: str, data):
-    path = f"{username}_{db_name}_db.json"
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+def save_db(db_name: str, username: str, data, db_session: Session):
+    payload = json.dumps(data)
+    record = db_session.query(models.AppData).filter(
+        models.AppData.username == username,
+        models.AppData.module_name == db_name
+    ).first()
+    
+    if record:
+        record.payload_json = payload
+    else:
+        new_record = models.AppData(username=username, module_name=db_name, payload_json=payload)
+        db_session.add(new_record)
+    db_session.commit()
 
 @app.get("/api/db/{db_name}")
-def read_db(db_name: str, current_user: models.User = Depends(get_current_user)):
+def read_db(db_name: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "superadmin":
         user_permissions = json.loads(current_user.permissions_json)
         if db_name not in user_permissions:
             raise HTTPException(status_code=403, detail="Not enough permissions")
     if db_name not in ["capacitaciones", "enlaces", "recordatorios"]:
         raise HTTPException(status_code=404, detail="DB not found")
-    return get_json_db(db_name, current_user.username)
+    return get_json_db(db_name, current_user.username, db)
 
 @app.post("/api/db/{db_name}")
-def write_db(db_name: str, data: dict | list = Body(...), current_user: models.User = Depends(get_current_user)):
+def write_db(db_name: str, data: dict | list = Body(...), current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "superadmin":
         user_permissions = json.loads(current_user.permissions_json)
         if db_name not in user_permissions:
             raise HTTPException(status_code=403, detail="Not enough permissions")
     if db_name not in ["capacitaciones", "enlaces", "recordatorios"]:
         raise HTTPException(status_code=404, detail="DB not found")
-    save_db(db_name, current_user.username, data)
+    save_db(db_name, current_user.username, data, db)
     return {"status": "success"}
 
 # === COMPARADOR DE DATOS ===
@@ -282,17 +294,7 @@ async def get_excel_hojas(file: UploadFile = File(...), current_user: models.Use
     except Exception as e:
         return {"hojas": []}
 
-@app.post("/api/abrir-ruta")
-async def abrir_ruta_local(req: Request, current_user: models.User = Depends(require_permission("recordatorios"))):
-    try:
-        data = await req.json()
-        ruta = data.get("ruta", "")
-        if ruta and os.path.exists(ruta):
-            # En Windows os.startfile abre carpetas/archivos
-            os.startfile(ruta)
-        return {"status": "ok"}
-    except Exception as e:
-        return {"error": str(e)}
+
 
 @app.post("/api/comparador")
 async def api_comparar(

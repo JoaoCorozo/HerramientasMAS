@@ -21,7 +21,7 @@ export default function LoginPage() {
       formData.append("username", username)
       formData.append("password", password)
 
-      const response = await fetch("http://localhost:8000/api/auth/login", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -35,7 +35,7 @@ export default function LoginPage() {
 
       const data = await response.json()
       
-      const meResponse = await fetch("http://localhost:8000/api/auth/me", {
+      const meResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/auth/me`, {
         headers: {
           Authorization: `Bearer ${data.access_token}`,
         },

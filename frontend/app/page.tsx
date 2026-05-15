@@ -58,7 +58,7 @@ export default function Home() {
       if (cFin2) formData.append("c_fin2", cFin2)
       if (fFin2) formData.append("f_fin2", fFin2)
 
-      const response = await fetch("http://127.0.0.1:8000/api/comparador", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/comparador`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData

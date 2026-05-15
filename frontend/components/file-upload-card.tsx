@@ -44,7 +44,7 @@ export function FileUploadCard({
       try {
         const formData = new FormData()
         formData.append("file", selectedFile)
-        const res = await fetch("http://127.0.0.1:8000/api/excel/hojas", {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/excel/hojas`, {
           method: "POST",
           body: formData
         })
