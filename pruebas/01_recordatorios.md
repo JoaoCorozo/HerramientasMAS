@@ -23,7 +23,7 @@ El calendario permite agendar tareas seleccionando una fecha y registrando los m
 7. **Completar:** Haz clic en el círculo de check a la izquierda del título. La tarea se tachará y se volverá opaca.
 
 ### 🖼️ Demostración Visual:
-![Creación Manual y Copiado de Ruta](./media/creacion_manual.gif)
+![Creación Manual y Copiado de Ruta](./media/creacion_manual.webp)
 
 ### 🧪 Caso de Prueba:
 * **Entrada:** Crear una tarea el día de hoy con título "Reunión de Coordinación", ruta `D:\Empresa\Minuta.pdf`.
@@ -53,7 +53,7 @@ Esta es una de las herramientas más potentes del módulo. Permite copiar filas 
    * Puedes presionar **"Importar Tarea"** para guardarla, **"Saltar Tarea"** si no deseas agregarla, o hacer clic en **"Importar Restantes Directo"** para saltarte la revisión manual y procesar todo de golpe.
 
 ### 🖼️ Demostración Visual:
-![Uso del Asistente de Importación de Excel](./media/asistente_importacion.gif)
+![Uso del Asistente de Importación de Excel](./media/asistente_importacion.webp)
 
 ### 🧪 Caso de Prueba:
 * **Entrada:** Pegar las siguientes líneas de prueba en el cuadro:
