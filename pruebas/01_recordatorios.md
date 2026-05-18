@@ -22,6 +22,9 @@ El calendario permite agendar tareas seleccionando una fecha y registrando los m
 6. **Copiar Ruta:** Haz clic en el botón azul `Copiar Ruta` sobre la tarjeta de la tarea. Comprueba que el botón cambia a `¡Copiado!` y la ruta se guarda en tu portapapeles.
 7. **Completar:** Haz clic en el círculo de check a la izquierda del título. La tarea se tachará y se volverá opaca.
 
+### 🖼️ Demostración Visual:
+![Creación Manual y Copiado de Ruta](./media/creacion_manual.gif)
+
 ### 🧪 Caso de Prueba:
 * **Entrada:** Crear una tarea el día de hoy con título "Reunión de Coordinación", ruta `D:\Empresa\Minuta.pdf`.
 * **Resultado Esperado:** 
@@ -48,6 +51,9 @@ Esta es una de las herramientas más potentes del módulo. Permite copiar filas 
    * El asistente te mostrará las tareas procesadas una a una.
    * Si alguna tarea tiene errores (por ejemplo, fecha inválida o falta el título), el asistente la marcará en rojo y te permitirá **corregir el campo en caliente** escribiendo en pantalla.
    * Puedes presionar **"Importar Tarea"** para guardarla, **"Saltar Tarea"** si no deseas agregarla, o hacer clic en **"Importar Restantes Directo"** para saltarte la revisión manual y procesar todo de golpe.
+
+### 🖼️ Demostración Visual:
+![Uso del Asistente de Importación de Excel](./media/asistente_importacion.gif)
 
 ### 🧪 Caso de Prueba:
 * **Entrada:** Pegar las siguientes líneas de prueba en el cuadro:

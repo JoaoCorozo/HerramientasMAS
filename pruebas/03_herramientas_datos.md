@@ -23,6 +23,9 @@ Esta potente herramienta cruza información de dos planillas Excel diferentes y 
 6. Haz clic en **"Procesar y Comparar"**.
 7. La plataforma procesará el cruce y **descargará automáticamente** una planilla Excel con el reporte generado, indicando los registros correspondientes y agregando una hoja detallada con las filas cruzadas completas.
 
+### 🖼️ Demostración Visual:
+![Uso de Comparador de Excel](./media/comparador_excel.gif)
+
 ### 🧪 Caso de Prueba:
 * **Entradas:**
   * **Archivo 1:** Excel con la columna A conteniendo: `Juan`, `Pedro`, `María`. (Fila inicio: 1)
@@ -47,6 +50,9 @@ Limpia listas de nombres desordenadas quitando espacios extraños, caracteres es
    * **Quitar tildes (Acentos):** Convierte `á, é, í` en `a, e, i` para evitar problemas en bases de datos.
 4. Haz clic en **"Normalizar Nombres"**.
 5. Los nombres limpios aparecerán en el cuadro de la derecha listos para copiar.
+
+### 🖼️ Demostración Visual:
+![Uso de Normalizador de Nombres](./media/normalizador_nombres.gif)
 
 ### 🧪 Caso de Prueba:
 * **Entrada:**
@@ -76,6 +82,9 @@ Valida y da formato profesional a números de identificación chilenos (RUT).
    * **Limpiar (Solo números):** Deja solo dígitos y dígito verificador.
 4. Haz clic en **"Normalizar RUTs"**.
 5. Los resultados se listarán a la derecha ordenados y clasificados (RUTs Válidos e Inválidos).
+
+### 🖼️ Demostración Visual:
+![Uso de Normalizador de RUT](./media/normalizador_rut.gif)
 
 ### 🧪 Caso de Prueba:
 * **Entrada:**

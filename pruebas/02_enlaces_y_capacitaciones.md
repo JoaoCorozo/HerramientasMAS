@@ -21,6 +21,9 @@ Este módulo sirve como repositorio central de URLs útiles, organizadas por emp
 6. **Buscador:** Escribe en la barra de búsqueda superior. El catálogo buscará en tiempo real coincidencias por Título, Empresa o Notas.
 7. **Acceso:** Presiona el botón verde **"IR"** en la tarjeta. Se abrirá la dirección en una pestaña nueva del navegador.
 
+### 🖼️ Demostración Visual:
+![Uso del Catálogo de Enlaces](./media/catalogo_enlaces.gif)
+
 ### 🧪 Caso de Prueba:
 * **Entrada:** Crear un enlace con título "Manual de Procedimientos", URL "google.com", categoría "Interno", y notas "Solo lectura".
 * **Resultado Esperado:**
@@ -46,6 +49,9 @@ Módulo diseñado para documentar cursos, capacitaciones internas, códigos de a
    * **Clave de Acceso / Notas:** Códigos de autenticación o instrucciones.
 4. Presiona **Guardar Curso**.
 5. Realiza búsquedas usando la barra superior por Nombre del Curso o Curso ID.
+
+### 🖼️ Demostración Visual:
+![Uso de la Base de Capacitaciones](./media/base_capacitaciones.gif)
 
 ### 🧪 Caso de Prueba:
 * **Entrada:** Crear un curso con ID "CAP-2026", Nombre "Inducción de Seguridad", Plataforma "Mutual", URL "mutual.cl".
