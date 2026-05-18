@@ -52,7 +52,7 @@ Limpia listas de nombres desordenadas quitando espacios extraños, caracteres es
 5. Los nombres limpios aparecerán en el cuadro de la derecha listos para copiar.
 
 ### 🖼️ Demostración Visual:
-![Uso de Normalizador de Nombres](./media/normalizador_nombres.gif)
+![Uso de Normalizador de Nombres](./media/normalizador_nombres.webp)
 
 ### 🧪 Caso de Prueba:
 * **Entrada:**
@@ -84,7 +84,7 @@ Valida y da formato profesional a números de identificación chilenos (RUT).
 5. Los resultados se listarán a la derecha ordenados y clasificados (RUTs Válidos e Inválidos).
 
 ### 🖼️ Demostración Visual:
-![Uso de Normalizador de RUT](./media/normalizador_rut.gif)
+![Uso de Normalizador de RUT](./media/normalizador_rut.webp)
 
 ### 🧪 Caso de Prueba:
 * **Entrada:**
