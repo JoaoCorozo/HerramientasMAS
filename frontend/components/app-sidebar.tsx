@@ -14,7 +14,8 @@ import {
   Settings,
   ChevronDown,
   LogOut,
-  Users
+  Users,
+  Package
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "./auth-provider"
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { icon: GraduationCap, label: "Capacitaciones Mod 1", href: "/capacitaciones", moduleName: "capacitaciones" },
   { icon: Link2, label: "Enlaces de Interes", href: "/enlaces", moduleName: "enlaces" },
   { icon: CalendarDays, label: "Calendario & Tareas", href: "/recordatorios", moduleName: "recordatorios" },
+  { icon: Package, label: "Generador de Cargas", href: "/generador" },
 ]
 
 export function AppSidebar() {

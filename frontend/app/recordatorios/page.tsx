@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Calendar as CalendarIcon, CheckCircle2, Circle, Plus, Trash2, ChevronLeft, ChevronRight, FileText, Mail, ClipboardPaste } from "lucide-react"
+import { Calendar as CalendarIcon, CheckCircle2, Circle, Plus, Trash2, ChevronLeft, ChevronRight, FileText, Mail, ClipboardPaste, Settings } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
@@ -24,6 +24,8 @@ interface Recordatorio {
   asunto: string
   ruta: string
   completada: boolean
+  correo_notificacion?: string
+  notificado?: boolean
 }
 
 interface RecordatorioImport extends Recordatorio {
@@ -56,9 +58,74 @@ export default function RecordatoriosPage() {
   const [grupo, setGrupo] = useState("")
   const [asunto, setAsunto] = useState("")
   const [ruta, setRuta] = useState("")
+  const [correoNotificacion, setCorreoNotificacion] = useState("")
+
+  // Configuración SMTP
+  const [smtpOpen, setSmtpOpen] = useState(false)
+  const [smtpHost, setSmtpHost] = useState("")
+  const [smtpPort, setSmtpPort] = useState("")
+  const [smtpUser, setSmtpUser] = useState("")
+  const [smtpPass, setSmtpPass] = useState("")
+  const [smtpSenderName, setSmtpSenderName] = useState("")
+  const [smtpSenderEmail, setSmtpSenderEmail] = useState("")
+
+  const fetchSmtpConfig = async () => {
+    try {
+      if (!token) return
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/smtp_config`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data && data.host) {
+          setSmtpHost(data.host || "")
+          setSmtpPort(data.port || "")
+          setSmtpUser(data.username || "")
+          setSmtpPass(data.password || "")
+          setSmtpSenderName(data.sender_name || "")
+          setSmtpSenderEmail(data.sender_email || "")
+        }
+      }
+    } catch (e) {
+      console.error("Error loading SMTP config:", e)
+    }
+  }
+
+  const saveSmtpConfig = async () => {
+    try {
+      if (!token) return
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/smtp_config`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          host: smtpHost,
+          port: smtpPort,
+          username: smtpUser,
+          password: smtpPass,
+          sender_name: smtpSenderName,
+          sender_email: smtpSenderEmail
+        })
+      })
+      if (res.ok) {
+        alert("Configuración SMTP guardada exitosamente.")
+        setSmtpOpen(false)
+      } else {
+        alert("Error al guardar la configuración SMTP.")
+      }
+    } catch (e) {
+      console.error("Error saving SMTP config:", e)
+      alert("Error de conexión al guardar configuración SMTP.")
+    }
+  }
 
   useEffect(() => {
-    if (token) fetchRecordatorios()
+    if (token) {
+      fetchRecordatorios()
+      fetchSmtpConfig()
+    }
   }, [token])
 
   const fetchRecordatorios = async () => {
@@ -210,7 +277,7 @@ export default function RecordatoriosPage() {
 
   const handleOpenNew = () => {
     setEditingIndex(null)
-    setTitulo(""); setDetalle(""); setCurso(""); setGrupo(""); setAsunto(""); setRuta("")
+    setTitulo(""); setDetalle(""); setCurso(""); setGrupo(""); setAsunto(""); setRuta(""); setCorreoNotificacion("")
     setIsOpen(true)
   }
 
@@ -223,6 +290,7 @@ export default function RecordatoriosPage() {
     setGrupo(evt.grupo || "")
     setAsunto(evt.asunto || "")
     setRuta(evt.ruta || "")
+    setCorreoNotificacion(evt.correo_notificacion || "")
     setIsOpen(true)
   }
 
@@ -230,7 +298,15 @@ export default function RecordatoriosPage() {
     if (!titulo) return alert("El título es obligatorio")
     
     const nuevo: Recordatorio = {
-      titulo, detalle, curso, grupo, asunto, ruta, completada: false
+      titulo, 
+      detalle, 
+      curso, 
+      grupo, 
+      asunto, 
+      ruta, 
+      completada: false,
+      correo_notificacion: correoNotificacion,
+      notificado: false
     }
     
     const newDb = JSON.parse(JSON.stringify(db))
@@ -238,6 +314,8 @@ export default function RecordatoriosPage() {
     
     if (editingIndex !== null) {
       nuevo.completada = newDb[selectedDate][editingIndex].completada
+      const prev = newDb[selectedDate][editingIndex]
+      nuevo.notificado = prev.correo_notificacion === correoNotificacion ? prev.notificado : false
       newDb[selectedDate][editingIndex] = nuevo
     } else {
       newDb[selectedDate].push(nuevo)
@@ -322,7 +400,9 @@ export default function RecordatoriosPage() {
             grupo: "",
             asunto: "",
             ruta: "",
-            completada: false
+            completada: false,
+            correo_notificacion: "",
+            notificado: false
           })
         }
       }
@@ -351,7 +431,9 @@ export default function RecordatoriosPage() {
         grupo: current.grupo,
         asunto: current.asunto,
         ruta: current.ruta,
-        completada: current.completada
+        completada: current.completada,
+        correo_notificacion: current.correo_notificacion || "",
+        notificado: false
       })
       setDb(newDb) // Local state refresh early
     }
@@ -426,6 +508,9 @@ export default function RecordatoriosPage() {
               {selectedDate}
             </h2>
             <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => setSmtpOpen(true)} className="bg-purple-600 hover:bg-purple-700 px-2 animate-pulse" title="Configuración SMTP">
+                <Settings className="h-4 w-4" />
+              </Button>
               <Button size="sm" onClick={() => setIsImportOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 px-2" title="Pegar desde Excel">
                 <ClipboardPaste className="h-4 w-4" />
               </Button>
@@ -463,15 +548,33 @@ export default function RecordatoriosPage() {
                       </h3>
                       {evt.curso && <p className="text-xs font-medium text-orange-500 mt-1">Curso ID: {evt.curso}</p>}
                       {evt.grupo && <p className="text-xs text-muted-foreground mt-1 truncate">{evt.grupo}</p>}
+                      {evt.correo_notificacion && (
+                        <p className={`text-[11px] font-semibold mt-1 px-2 py-0.5 rounded-md w-max ${evt.notificado ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>
+                          📧 {evt.correo_notificacion} {evt.notificado ? '✓ (Enviado)' : '(Pendiente 9:00 AM)'}
+                        </p>
+                      )}
                       <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{evt.detalle}</p>
                     </div>
                   </div>
                   
-                  <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                  <div className="absolute bottom-3 right-3 flex items-center gap-2 opacity-90 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const title = encodeURIComponent(evt.titulo);
+                        const details = encodeURIComponent(`${evt.detalle}\n\nCurso ID: ${evt.curso}\nGrupo: ${evt.grupo}\nAsunto: ${evt.asunto}\nRuta: ${evt.ruta}`);
+                        const cleanDate = selectedDate.replace(/-/g, "");
+                        window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${cleanDate}/${cleanDate}&details=${details}`, "_blank");
+                      }}
+                      className="text-[11px] flex items-center gap-1 font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 px-2 py-1 rounded transition-colors"
+                      title="Agregar a Google Calendar"
+                    >
+                      📅 Calendar
+                    </button>
                     {evt.ruta && (
                       <button 
                         onClick={(e) => handleCopiarRuta(evt.ruta, idx, e)}
-                        className="text-xs flex items-center gap-1 font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 px-2 py-1 rounded transition-colors"
+                        className="text-[11px] flex items-center gap-1 font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 px-2 py-1 rounded transition-colors"
                         title="Copiar ruta"
                       >
                         {rutaCopied === idx ? "¡Copiado!" : "Copiar Ruta"}
@@ -543,6 +646,12 @@ export default function RecordatoriosPage() {
                 <button onClick={() => copyToClipboard(ruta)} className="text-xs text-blue-500 hover:underline">Copiar</button>
               </div>
               <Input value={ruta} onChange={e => setRuta(e.target.value)} placeholder="G:/Unidades compartidas/..." />
+            </div>
+
+            <div className="grid gap-2 bg-purple-500/5 p-3 rounded-lg border border-purple-500/20">
+              <Label className="text-purple-600 dark:text-purple-400 font-semibold">Correo de Notificación Programada (9:00 AM)</Label>
+              <Input value={correoNotificacion} onChange={e => setCorreoNotificacion(e.target.value)} placeholder="ejemplo@bancoestado.cl" type="email" className="border-purple-500/30 focus:border-purple-500" />
+              <span className="text-[10px] text-muted-foreground">Si ingresas un correo, el sistema le enviará un recordatorio automático el día de la tarea a las 9:00 AM.</span>
             </div>
           </div>
           <DialogFooter>
@@ -616,6 +725,11 @@ export default function RecordatoriosPage() {
                 <Label>Ruta de Archivos (Local)</Label>
                 <Input value={importQueue[currentImportIndex].ruta} onChange={e => handleUpdateCurrentImport('ruta', e.target.value)} placeholder="G:/Unidades compartidas/..." />
               </div>
+
+              <div className="grid gap-2 bg-purple-500/5 p-3 rounded-lg border border-purple-500/20">
+                <Label className="text-purple-600 dark:text-purple-400 font-semibold">Correo de Notificación Programada (9:00 AM)</Label>
+                <Input value={importQueue[currentImportIndex].correo_notificacion || ""} onChange={e => handleUpdateCurrentImport('correo_notificacion', e.target.value)} placeholder="ejemplo@bancoestado.cl" type="email" className="border-purple-500/30 focus:border-purple-500" />
+              </div>
             </div>
           )}
           <DialogFooter className="flex flex-row justify-between w-full items-center gap-2 sm:justify-between">
@@ -625,6 +739,50 @@ export default function RecordatoriosPage() {
             <Button onClick={() => handleWizardNext(true)} className="bg-emerald-600 hover:bg-emerald-700 w-1/2">
               Guardar y Siguiente
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Ajustes SMTP */}
+      <Dialog open={smtpOpen} onOpenChange={setSmtpOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>⚙️ Ajustes de Notificaciones SMTP</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Servidor SMTP (Host)</Label>
+              <Input value={smtpHost} onChange={e => setSmtpHost(e.target.value)} placeholder="smtp.gmail.com o smtp.office365.com" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Puerto</Label>
+                <Input value={smtpPort} onChange={e => setSmtpPort(e.target.value)} placeholder="587" />
+              </div>
+              <div className="grid gap-2 flex items-end">
+                <span className="text-xs text-muted-foreground pb-2">Normalmente 587 (TLS) o 465 (SSL)</span>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label>Usuario / Correo de Acceso</Label>
+              <Input value={smtpUser} onChange={e => setSmtpUser(e.target.value)} placeholder="usuario@gmail.com" />
+            </div>
+            <div className="grid gap-2">
+              <Label>Contraseña</Label>
+              <Input value={smtpPass} onChange={e => setSmtpPass(e.target.value)} placeholder="Contraseña de aplicación" type="password" />
+            </div>
+            <div className="grid gap-2">
+              <Label>Nombre del Remitente</Label>
+              <Input value={smtpSenderName} onChange={e => setSmtpSenderName(e.target.value)} placeholder="Plataforma de Herramientas BEX" />
+            </div>
+            <div className="grid gap-2">
+              <Label>Correo del Remitente</Label>
+              <Input value={smtpSenderEmail} onChange={e => setSmtpSenderEmail(e.target.value)} placeholder="remitente@correo.com" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSmtpOpen(false)}>Cancelar</Button>
+            <Button onClick={saveSmtpConfig} className="bg-purple-600 hover:bg-purple-700">Guardar Configuración</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

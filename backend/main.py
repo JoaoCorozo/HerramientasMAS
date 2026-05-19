@@ -9,8 +9,13 @@ import os
 import csv
 from datetime import datetime
 import openpyxl
+import asyncio
+import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-from database import engine, get_db, Base
+from database import engine, get_db, Base, SessionLocal
 import models
 import auth
 
@@ -28,6 +33,159 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
+logger = logging.getLogger("recordatorios_mailer")
+
+async def dispatcher_background_loop():
+    logger.info("Recordatorios mailer background worker started.")
+    while True:
+        try:
+            # Despierta cada 60 segundos
+            await asyncio.sleep(60)
+            
+            db = SessionLocal()
+            now = datetime.now()
+            
+            # Ejecutar despachos si ya son las 9:00 AM o más
+            current_date_str = now.strftime("%Y-%m-%d")
+            if now.hour >= 9:
+                records = db.query(models.AppData).filter(models.AppData.module_name == "recordatorios").all()
+                for rec in records:
+                    if not rec.payload_json: continue
+                    try:
+                        tasks_db = json.loads(rec.payload_json)
+                    except:
+                        continue
+                        
+                    # Agrupar tareas pendientes por correo de notificación
+                    grouped_tasks = {}
+                    for date_str, task_list in list(tasks_db.items()):
+                        if date_str <= current_date_str:
+                            for idx, task in enumerate(task_list):
+                                if not task.get("completada", False) and task.get("correo_notificacion") and not task.get("notificado", False):
+                                    email = task.get("correo_notificacion").strip().lower()
+                                    if email:
+                                        if email not in grouped_tasks:
+                                            grouped_tasks[email] = []
+                                        grouped_tasks[email].append((date_str, idx, task))
+                    
+                    if not grouped_tasks:
+                        continue
+                        
+                    # Cargar SMTP config de este usuario
+                    smtp_rec = db.query(models.AppData).filter(
+                        models.AppData.username == rec.username,
+                        models.AppData.module_name == "smtp_config"
+                    ).first()
+                    
+                    if not smtp_rec or not smtp_rec.payload_json:
+                        continue
+                        
+                    try:
+                        smtp_cfg = json.loads(smtp_rec.payload_json)
+                    except:
+                        continue
+                        
+                    if not smtp_cfg or not smtp_cfg.get("host") or not smtp_cfg.get("username") or not smtp_cfg.get("password"):
+                        continue
+                        
+                    dirty = False
+                    # Procesar cada destinatario y enviarle su resumen
+                    for email, tasks_to_send in grouped_tasks.items():
+                        try:
+                            tasks_html = ""
+                            for date_str, idx, t in tasks_to_send:
+                                tasks_html += f"""
+                                <div style="margin-bottom: 20px; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px; background-color: #fafafa; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                    <div style="margin-bottom: 12px; border-bottom: 1px solid #f4f4f5; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="font-size: 16px; font-weight: bold; color: #8b5cf6;">📌 {t.get('titulo', 'Tarea')}</span>
+                                        <span style="font-size: 12px; color: #a1a1aa; background-color: #f4f4f5; padding: 4px 8px; border-radius: 4px; font-weight: bold;">📅 {date_str}</span>
+                                    </div>
+                                    <p style="margin: 0 0 12px 0; font-size: 14px; color: #3f3f46; line-height: 1.5;">{t.get('detalle', 'Sin detalles adicionales.')}</p>
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                """
+                                if t.get("curso"):
+                                    tasks_html += f"""
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: bold; color: #71717a; width: 100px;">📚 Curso ID:</td>
+                                            <td style="padding: 4px 0; color: #18181b;">{t.get('curso')}</td>
+                                        </tr>
+                                    """
+                                if t.get("grupo"):
+                                    tasks_html += f"""
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: bold; color: #71717a;">👥 Grupo:</td>
+                                            <td style="padding: 4px 0; color: #18181b;">{t.get('grupo')}</td>
+                                        </tr>
+                                    """
+                                if t.get("asunto"):
+                                    tasks_html += f"""
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: bold; color: #71717a;">📝 Asunto:</td>
+                                            <td style="padding: 4px 0; color: #18181b;">{t.get('asunto')}</td>
+                                        </tr>
+                                    """
+                                tasks_html += """
+                                    </table>
+                                </div>
+                                """
+
+                            html_content = f"""
+                            <html>
+                            <body style="font-family: Arial, sans-serif; background-color: #f4f4f5; padding: 20px; margin: 0;">
+                                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e4e4e7; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                                    <div style="background-color: #8b5cf6; padding: 24px; color: #ffffff; text-align: center;">
+                                        <h2 style="margin: 0; font-size: 24px; font-weight: bold; letter-spacing: -0.5px;">🔔 Resumen de Tareas Pendientes</h2>
+                                        <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 14px;">Plataforma de Herramientas BEX</p>
+                                    </div>
+                                    <div style="padding: 24px; color: #18181b;">
+                                        <p style="font-size: 15px; color: #3f3f46; margin-top: 0; margin-bottom: 20px;">Tienes las siguientes tareas programadas para hoy:</p>
+                                        
+                                        {tasks_html}
+                                        
+                                        <hr style="border: 0; border-top: 1px solid #e4e4e7; margin: 24px 0;">
+                                        <p style="font-size: 12px; color: #a1a1aa; text-align: center; margin-bottom: 0; line-height: 1.5;">
+                                            Este es un recordatorio automático consolidado enviado a las 9:00 AM.<br>
+                                            Por favor, no respondas a este correo.
+                                        </p>
+                                    </div>
+                                </div>
+                            </body>
+                            </html>
+                            """
+                            
+                            msg = MIMEMultipart('alternative')
+                            msg['Subject'] = f"🔔 Resumen de Tareas Pendientes ({len(tasks_to_send)} Tareas)"
+                            sender_name = smtp_cfg.get("sender_name") or "Plataforma Herramientas"
+                            sender_addr = smtp_cfg.get("sender_email") or smtp_cfg.get("username")
+                            msg['From'] = f"{sender_name} <{sender_addr}>"
+                            msg['To'] = email
+                            
+                            msg.attach(MIMEText(html_content, 'html'))
+                            
+                            # Conexión SMTP
+                            srv = smtplib.SMTP(smtp_cfg["host"], int(smtp_cfg["port"]))
+                            if smtp_cfg.get("use_tls", True) or int(smtp_cfg.get("port", 587)) == 587:
+                                srv.starttls()
+                            srv.login(smtp_cfg["username"], smtp_cfg["password"])
+                            srv.sendmail(sender_addr, email, msg.as_string())
+                            srv.quit()
+                            
+                            # Marcar como notificado
+                            for date_str, idx, task in tasks_to_send:
+                                tasks_db[date_str][idx]["notificado"] = True
+                            dirty = True
+                            logger.info(f"Consolidated notification email sent to {email} with {len(tasks_to_send)} tasks.")
+                        except Exception as send_err:
+                            logger.error(f"Error sending consolidated email to {email}: {send_err}")
+                            
+                    if dirty:
+                        rec.payload_json = json.dumps(tasks_db)
+                        db.commit()
+                        
+            db.close()
+        except Exception as loop_err:
+            logger.error(f"Error in dispatcher background loop: {loop_err}")
+
 @app.on_event("startup")
 def startup_event():
     db = next(get_db())
@@ -42,6 +200,7 @@ def startup_event():
         )
         db.add(admin_user)
         db.commit()
+    asyncio.create_task(dispatcher_background_loop())
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     payload = auth.decode_access_token(token)
@@ -231,9 +390,9 @@ def save_db(db_name: str, username: str, data, db_session: Session):
 def read_db(db_name: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "superadmin":
         user_permissions = json.loads(current_user.permissions_json)
-        if db_name not in user_permissions:
+        if db_name not in user_permissions and not (db_name == "smtp_config" and "recordatorios" in user_permissions):
             raise HTTPException(status_code=403, detail="Not enough permissions")
-    if db_name not in ["capacitaciones", "enlaces", "recordatorios"]:
+    if db_name not in ["capacitaciones", "enlaces", "recordatorios", "smtp_config"]:
         raise HTTPException(status_code=404, detail="DB not found")
     return get_json_db(db_name, current_user.username, db)
 
@@ -241,9 +400,9 @@ def read_db(db_name: str, current_user: models.User = Depends(get_current_user),
 def write_db(db_name: str, data: dict | list = Body(...), current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "superadmin":
         user_permissions = json.loads(current_user.permissions_json)
-        if db_name not in user_permissions:
+        if db_name not in user_permissions and not (db_name == "smtp_config" and "recordatorios" in user_permissions):
             raise HTTPException(status_code=403, detail="Not enough permissions")
-    if db_name not in ["capacitaciones", "enlaces", "recordatorios"]:
+    if db_name not in ["capacitaciones", "enlaces", "recordatorios", "smtp_config"]:
         raise HTTPException(status_code=404, detail="DB not found")
     save_db(db_name, current_user.username, data, db)
     return {"status": "success"}
@@ -382,3 +541,195 @@ async def api_comparar(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# === GENERADOR DE CARGAS / SCRIPTS DE INDUCCIÓN ===
+import zipfile
+import shutil
+import tempfile
+import unicodedata
+from fastapi import BackgroundTasks
+
+def normalize_text(val):
+    if val is None:
+        return ""
+    s = str(val).strip()
+    s = "".join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+    return s.upper()
+
+def clean_username_rut(rut_val):
+    if not rut_val:
+        return ""
+    r = str(rut_val).strip().replace(".", "").replace("-", "").replace(" ", "")
+    if not r:
+        return ""
+    if r[-1].upper() == 'K':
+        r = r[:-1] + 'k'
+    return r
+
+@app.post("/api/excel/generar-carga")
+async def api_generar_carga(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    grupo: str = Form(...),
+    current_user: models.User = Depends(get_current_user)
+):
+    try:
+        temp_dir = tempfile.mkdtemp()
+        path = os.path.join(temp_dir, file.filename)
+        with open(path, "wb") as f:
+            f.write(await file.read())
+            
+        matriz_name = "MATRIZ_CURSOS_BEX.xlsx"
+        matriz_path = os.path.join("..", matriz_name)
+        if not os.path.exists(matriz_path):
+            matriz_path = matriz_name
+            
+        if not os.path.exists(matriz_path):
+            raise HTTPException(status_code=404, detail="No se encontró la base de datos de cursos 'MATRIZ_CURSOS_BEX.xlsx' en el servidor.")
+            
+        wb_matriz = openpyxl.load_workbook(matriz_path, data_only=True)
+        mapa_cursos_perfil = {}
+        for sname in wb_matriz.sheetnames:
+            sheet_mat = wb_matriz[sname]
+            cursos = []
+            for r_idx in range(3, sheet_mat.max_row + 1):
+                c_name = sheet_mat.cell(row=r_idx, column=1).value
+                if c_name and str(c_name).strip():
+                    cursos.append(str(c_name).strip())
+            mapa_cursos_perfil[normalize_text(sname)] = cursos
+            
+        wb_matriz.close()
+        
+        wb_dot = openpyxl.load_workbook(path, data_only=True)
+        sheet_dot = None
+        for sname in wb_dot.sheetnames:
+            if "FORMATO ENVIAR" in sname.upper():
+                sheet_dot = wb_dot[sname]
+                break
+        if not sheet_dot:
+            sheet_dot = wb_dot.active
+            
+        rows_dot = list(sheet_dot.iter_rows(values_only=True))
+        if not rows_dot:
+            raise HTTPException(status_code=400, detail="El archivo de dotación está vacío.")
+            
+        header = rows_dot[0]
+        col_nombre = None
+        col_run = None
+        col_correo = None
+        col_perfil = None
+        
+        for idx, col in enumerate(header):
+            if not col: continue
+            col_upper = str(col).upper()
+            if "NOMBRE" in col_upper and "COLABORADOR" in col_upper:
+                col_nombre = idx
+            elif "RUN" in col_upper and "COLABORADOR" in col_upper:
+                col_run = idx
+            elif "CORREO" in col_upper and "COLABORADOR" in col_upper:
+                col_correo = idx
+            elif "PERFIL" in col_upper and "INDUCCI" in col_upper:
+                col_perfil = idx
+                
+        if col_nombre is None or col_run is None or col_perfil is None:
+            raise HTTPException(status_code=400, detail="No se encontraron las columnas NOMBRE COLABORADOR, RUN COLABORADOR o PERFIL DE INDUCCIÓN en la cabecera.")
+            
+        colaboradores_por_perfil = {}
+        for r_idx, r in enumerate(rows_dot[1:]):
+            nombre_val = r[col_nombre]
+            run_val = r[col_run]
+            perfil_val = r[col_perfil]
+            correo_val = r[col_correo] if col_correo is not None else ""
+            
+            if not nombre_val or not run_val:
+                continue
+                
+            username = clean_username_rut(run_val)
+            if not username: continue
+            
+            nombre_clean = str(nombre_val).upper().strip()
+            correo_clean = str(correo_val).upper().strip() if correo_val else ""
+            perfil_clean = str(perfil_val).strip() if perfil_val else "SIN PERFIL"
+            
+            perfil_norm = normalize_text(perfil_clean)
+            
+            colab_info = {
+                "username": username,
+                "firstname": nombre_clean,
+                "lastname": nombre_clean,
+                "email": correo_clean,
+                "department": perfil_clean.upper()
+            }
+            
+            if perfil_norm not in colaboradores_por_perfil:
+                colaboradores_por_perfil[perfil_norm] = {
+                    "original_name": perfil_clean,
+                    "items": []
+                }
+            colaboradores_por_perfil[perfil_norm]["items"].append(colab_info)
+            
+        wb_dot.close()
+        
+        generated_files = []
+        for p_norm, p_data in colaboradores_por_perfil.items():
+            original_name = p_data["original_name"]
+            items = p_data["items"]
+            
+            cursos = mapa_cursos_perfil.get(p_norm, [])
+            
+            headers = ["username", "password", "firstname", "lastname", "email", "address", "auth", "department", "suspended"]
+            for i in range(1, len(cursos) + 1):
+                headers.append(f"group{i}")
+                headers.append(f"course{i}")
+                
+            safe_p_name = "".join(c for c in p_norm if c.isalnum() or c in (" ", "_", "-")).replace(" ", "_")
+            csv_filename = f"script_{safe_p_name}.csv"
+            csv_filepath = os.path.join(temp_dir, csv_filename)
+            
+            with open(csv_filepath, mode="w", newline="", encoding="utf-8-sig") as csv_file:
+                writer = csv.writer(csv_file, delimiter=";")
+                writer.writerow(headers)
+                
+                for item in items:
+                    row = [
+                        item["username"],
+                        item["username"],
+                        item["firstname"],
+                        item["lastname"],
+                        item["email"],
+                        item["username"],
+                        "saml2",
+                        item["department"],
+                        "0"
+                    ]
+                    for idx, course in enumerate(cursos):
+                        row.append(grupo)
+                        row.append(course)
+                    writer.writerow(row)
+                    
+            generated_files.append(csv_filepath)
+            
+        if not generated_files:
+            raise HTTPException(status_code=400, detail="No se generaron registros válidos del archivo de entrada.")
+            
+        zip_name = f"Cargas_Induccion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        zip_path = os.path.join(temp_dir, zip_name)
+        
+        with zipfile.ZipFile(zip_path, "w") as zip_f:
+            for fpath in generated_files:
+                zip_f.write(fpath, os.path.basename(fpath))
+                
+        dest_zip_path = os.path.abspath(zip_name)
+        shutil.copy(zip_path, dest_zip_path)
+        
+        shutil.rmtree(temp_dir)
+        
+        background_tasks.add_task(os.remove, dest_zip_path)
+        return FileResponse(path=dest_zip_path, filename=zip_name, media_type="application/zip")
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fallo al procesar: {str(e)}")
+
