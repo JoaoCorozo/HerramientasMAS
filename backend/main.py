@@ -567,14 +567,173 @@ def clean_username_rut(rut_val):
         r = r[:-1] + 'k'
     return r
 
+def process_row_mapping(row, col_name_to_idx, mapping, grupo, mapa_cursos_perfil):
+    processed_row = {}
+    
+    for out_col, cfg in mapping.items():
+        val_type = cfg.get("type")
+        val_setting = cfg.get("value")
+        
+        raw_val = ""
+        if val_type == "fixed":
+            raw_val = val_setting
+        elif val_type == "column":
+            idx = col_name_to_idx.get(val_setting)
+            if idx is not None and idx < len(row):
+                raw_val = row[idx]
+        
+        # Apply normalizations
+        if out_col in ["username", "password"]:
+            processed_row[out_col] = clean_username_rut(raw_val)
+        elif out_col in ["firstname", "lastname"]:
+            processed_row[out_col] = str(raw_val).upper().strip() if raw_val is not None else ""
+        elif out_col == "email":
+            processed_row[out_col] = str(raw_val).upper().strip() if raw_val is not None else ""
+        elif out_col == "department":
+            processed_row[out_col] = str(raw_val).upper().strip() if raw_val is not None else ""
+        else:
+            processed_row[out_col] = str(raw_val).strip() if raw_val is not None else ""
+            
+    # Get profile (from department if present)
+    department_val = processed_row.get("department", "")
+    perfil_norm = normalize_text(department_val) if department_val else "SIN_PERFIL"
+    perfil_original = department_val if department_val else "SIN PERFIL"
+    
+    courses = mapa_cursos_perfil.get(perfil_norm, [])
+    
+    return {
+        "processed_row": processed_row,
+        "perfil_norm": perfil_norm,
+        "perfil_original": perfil_original,
+        "courses": courses
+    }
+
+@app.post("/api/excel/inspect")
+async def api_inspect_excel(
+    file: UploadFile = File(...),
+    current_user: models.User = Depends(get_current_user)
+):
+    try:
+        temp_dir = tempfile.mkdtemp()
+        path = os.path.join(temp_dir, file.filename)
+        with open(path, "wb") as f:
+            f.write(await file.read())
+            
+        wb = openpyxl.load_workbook(path, read_only=True)
+        sheets = {}
+        for sname in wb.sheetnames:
+            sheet = wb[sname]
+            headers = []
+            for row in sheet.iter_rows(max_row=1, values_only=True):
+                headers = [str(cell).strip() for cell in row if cell is not None and str(cell).strip()]
+                break
+            sheets[sname] = headers
+            
+        wb.close()
+        shutil.rmtree(temp_dir)
+        return {"sheets": sheets}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al inspeccionar archivo: {str(e)}")
+
+@app.post("/api/excel/preview")
+async def api_preview_carga(
+    file: UploadFile = File(...),
+    sheet_name: str = Form(...),
+    grupo: str = Form(...),
+    mapping: str = Form(...),
+    current_user: models.User = Depends(get_current_user)
+):
+    try:
+        mapping_dict = json.loads(mapping)
+        
+        temp_dir = tempfile.mkdtemp()
+        path = os.path.join(temp_dir, file.filename)
+        with open(path, "wb") as f:
+            f.write(await file.read())
+            
+        matriz_name = "MATRIZ_CURSOS_BEX.xlsx"
+        matriz_path = os.path.join("..", matriz_name)
+        if not os.path.exists(matriz_path):
+            matriz_path = matriz_name
+            
+        mapa_cursos_perfil = {}
+        if os.path.exists(matriz_path):
+            wb_matriz = openpyxl.load_workbook(matriz_path, data_only=True)
+            for sname in wb_matriz.sheetnames:
+                sheet_mat = wb_matriz[sname]
+                cursos = []
+                for r_idx in range(3, sheet_mat.max_row + 1):
+                    c_name = sheet_mat.cell(row=r_idx, column=1).value
+                    if c_name and str(c_name).strip():
+                        cursos.append(str(c_name).strip())
+                mapa_cursos_perfil[normalize_text(sname)] = cursos
+            wb_matriz.close()
+            
+        wb_dot = openpyxl.load_workbook(path, data_only=True)
+        if sheet_name not in wb_dot.sheetnames:
+            raise HTTPException(status_code=400, detail=f"No se encontró la hoja '{sheet_name}' en el Excel.")
+            
+        sheet_dot = wb_dot[sheet_name]
+        rows_dot = list(sheet_dot.iter_rows(values_only=True))
+        wb_dot.close()
+        shutil.rmtree(temp_dir)
+        
+        if not rows_dot:
+            raise HTTPException(status_code=400, detail="La hoja seleccionada está vacía.")
+            
+        header = [str(c).strip() if c else "" for c in rows_dot[0]]
+        col_name_to_idx = {name: idx for idx, name in enumerate(header) if name}
+        
+        previews = {}
+        data_rows = rows_dot[1:]
+        
+        for r in data_rows:
+            if not any(r):
+                continue
+                
+            res = process_row_mapping(r, col_name_to_idx, mapping_dict, grupo, mapa_cursos_perfil)
+            p_norm = res["perfil_norm"]
+            p_original = res["perfil_original"]
+            processed_row = res["processed_row"]
+            courses = res["courses"]
+            
+            if p_norm not in previews:
+                out_headers = list(mapping_dict.keys())
+                for i in range(1, len(courses) + 1):
+                    out_headers.append(f"group{i}")
+                    out_headers.append(f"course{i}")
+                
+                previews[p_norm] = {
+                    "profile_name": p_original,
+                    "headers": out_headers,
+                    "rows": []
+                }
+                
+            if len(previews[p_norm]["rows"]) < 10:
+                row_vals = []
+                for out_col in mapping_dict.keys():
+                    row_vals.append(processed_row.get(out_col, ""))
+                for course in courses:
+                    row_vals.append(grupo)
+                    row_vals.append(course)
+                previews[p_norm]["rows"].append(row_vals)
+                
+        return {"previews": previews}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar previsualización: {str(e)}")
+
 @app.post("/api/excel/generar-carga")
 async def api_generar_carga(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    sheet_name: str = Form(...),
     grupo: str = Form(...),
+    mapping: str = Form(...),
     current_user: models.User = Depends(get_current_user)
 ):
     try:
+        mapping_dict = json.loads(mapping)
+        
         temp_dir = tempfile.mkdtemp()
         path = os.path.join(temp_dir, file.filename)
         with open(path, "wb") as f:
@@ -602,86 +761,52 @@ async def api_generar_carga(
         wb_matriz.close()
         
         wb_dot = openpyxl.load_workbook(path, data_only=True)
-        sheet_dot = None
-        for sname in wb_dot.sheetnames:
-            if "FORMATO ENVIAR" in sname.upper():
-                sheet_dot = wb_dot[sname]
-                break
-        if not sheet_dot:
-            sheet_dot = wb_dot.active
+        if sheet_name not in wb_dot.sheetnames:
+            raise HTTPException(status_code=400, detail=f"No se encontró la hoja '{sheet_name}' en el Excel.")
             
+        sheet_dot = wb_dot[sheet_name]
         rows_dot = list(sheet_dot.iter_rows(values_only=True))
+        wb_dot.close()
+        
         if not rows_dot:
             raise HTTPException(status_code=400, detail="El archivo de dotación está vacío.")
             
-        header = rows_dot[0]
-        col_nombre = None
-        col_run = None
-        col_correo = None
-        col_perfil = None
+        header = [str(c).strip() if c else "" for c in rows_dot[0]]
+        col_name_to_idx = {name: idx for idx, name in enumerate(header) if name}
         
-        for idx, col in enumerate(header):
-            if not col: continue
-            col_upper = str(col).upper()
-            if "NOMBRE" in col_upper and "COLABORADOR" in col_upper:
-                col_nombre = idx
-            elif "RUN" in col_upper and "COLABORADOR" in col_upper:
-                col_run = idx
-            elif "CORREO" in col_upper and "COLABORADOR" in col_upper:
-                col_correo = idx
-            elif "PERFIL" in col_upper and "INDUCCI" in col_upper:
-                col_perfil = idx
-                
-        if col_nombre is None or col_run is None or col_perfil is None:
-            raise HTTPException(status_code=400, detail="No se encontraron las columnas NOMBRE COLABORADOR, RUN COLABORADOR o PERFIL DE INDUCCIÓN en la cabecera.")
-            
         colaboradores_por_perfil = {}
         for r_idx, r in enumerate(rows_dot[1:]):
-            nombre_val = r[col_nombre]
-            run_val = r[col_run]
-            perfil_val = r[col_perfil]
-            correo_val = r[col_correo] if col_correo is not None else ""
-            
-            if not nombre_val or not run_val:
+            if not any(r):
                 continue
                 
-            username = clean_username_rut(run_val)
-            if not username: continue
+            res = process_row_mapping(r, col_name_to_idx, mapping_dict, grupo, mapa_cursos_perfil)
+            p_norm = res["perfil_norm"]
+            p_original = res["perfil_original"]
+            processed_row = res["processed_row"]
+            courses = res["courses"]
             
-            nombre_clean = str(nombre_val).upper().strip()
-            correo_clean = str(correo_val).upper().strip() if correo_val else ""
-            perfil_clean = str(perfil_val).strip() if perfil_val else "SIN PERFIL"
-            
-            perfil_norm = normalize_text(perfil_clean)
-            
-            colab_info = {
-                "username": username,
-                "firstname": nombre_clean,
-                "lastname": nombre_clean,
-                "email": correo_clean,
-                "department": perfil_clean.upper()
-            }
-            
-            if perfil_norm not in colaboradores_por_perfil:
-                colaboradores_por_perfil[perfil_norm] = {
-                    "original_name": perfil_clean,
+            username = processed_row.get("username")
+            if not username:
+                continue
+                
+            if p_norm not in colaboradores_por_perfil:
+                colaboradores_por_perfil[p_norm] = {
+                    "original_name": p_original,
+                    "courses": courses,
                     "items": []
                 }
-            colaboradores_por_perfil[perfil_norm]["items"].append(colab_info)
+            colaboradores_por_perfil[p_norm]["items"].append(processed_row)
             
-        wb_dot.close()
-        
         generated_files = []
         for p_norm, p_data in colaboradores_por_perfil.items():
             original_name = p_data["original_name"]
             items = p_data["items"]
+            cursos = p_data["courses"]
             
-            cursos = mapa_cursos_perfil.get(p_norm, [])
-            
-            headers = ["username", "password", "firstname", "lastname", "email", "address", "auth", "department", "suspended"]
+            out_headers = list(mapping_dict.keys())
             for i in range(1, len(cursos) + 1):
-                headers.append(f"group{i}")
-                headers.append(f"course{i}")
+                out_headers.append(f"group{i}")
+                out_headers.append(f"course{i}")
                 
             safe_p_name = "".join(c for c in p_norm if c.isalnum() or c in (" ", "_", "-")).replace(" ", "_")
             csv_filename = f"script_{safe_p_name}.csv"
@@ -689,21 +814,13 @@ async def api_generar_carga(
             
             with open(csv_filepath, mode="w", newline="", encoding="utf-8-sig") as csv_file:
                 writer = csv.writer(csv_file, delimiter=";")
-                writer.writerow(headers)
+                writer.writerow(out_headers)
                 
                 for item in items:
-                    row = [
-                        item["username"],
-                        item["username"],
-                        item["firstname"],
-                        item["lastname"],
-                        item["email"],
-                        item["username"],
-                        "saml2",
-                        item["department"],
-                        "0"
-                    ]
-                    for idx, course in enumerate(cursos):
+                    row = []
+                    for out_col in mapping_dict.keys():
+                        row.append(item.get(out_col, ""))
+                    for course in cursos:
                         row.append(grupo)
                         row.append(course)
                     writer.writerow(row)
@@ -732,4 +849,5 @@ async def api_generar_carga(
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fallo al procesar: {str(e)}")
+
 
