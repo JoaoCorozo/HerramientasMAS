@@ -39,9 +39,24 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        {/* Script inline para aplicar el tema guardado ANTES del primer render, evitando parpadeo */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var t = localStorage.getItem('app-theme') || 'dark';
+                document.documentElement.classList.add(t);
+              } catch(e) {
+                document.documentElement.classList.add('dark');
+              }
+            `,
+          }}
+        />
+      </head>
       <body className="font-sans antialiased bg-background">
         <AuthProvider>
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          <ThemeProvider>
             {children}
           </ThemeProvider>
         </AuthProvider>
@@ -50,4 +65,3 @@ export default function RootLayout({
     </html>
   )
 }
-
