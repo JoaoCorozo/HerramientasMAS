@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { useTheme } from "@/components/theme-provider"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -38,16 +37,23 @@ const navItems: NavItem[] = [
   { icon: Package, label: "Generador de Cargas", href: "/generador" },
 ]
 
+const PALETTES = [
+  { id: 'azul',    label: 'Azul',    color: '#4f7fff' },
+  { id: 'violeta', label: 'Violeta', color: '#9747ff' },
+  { id: 'verde',   label: 'Verde',   color: '#22c87a' },
+  { id: 'naranja', label: 'Naranja', color: '#ff8c30' },
+  { id: 'rosa',    label: 'Rosa',    color: '#f43f8f' },
+  { id: 'cyan',    label: 'Cyan',    color: '#06b6d4' },
+  { id: 'rojo',    label: 'Rojo',    color: '#ef4444' },
+  { id: 'ambar',   label: 'Ámbar',   color: '#f59e0b' },
+] as const
+
+type PaletteId = typeof PALETTES[number]['id']
+
 export function AppSidebar() {
   const pathname = usePathname()
-  const { resolvedTheme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
+  const { resolvedTheme, setTheme, palette, setPalette } = useTheme()
   const { user, logout } = useAuth()
-
-  // Mounted para evitar mismatch de hidratación
-  useState(() => {
-    setMounted(true)
-  })
 
   // Si no hay usuario, no renderizamos el sidebar (probablemente estamos en /login)
   if (!user) return null
@@ -109,7 +115,42 @@ export function AppSidebar() {
         </div>
       </nav>
 
-      <div className="px-3 py-4 border-t border-sidebar-border space-y-2">
+      <div className="px-3 py-4 border-t border-sidebar-border space-y-3">
+
+        {/* Selector de Paleta de Colores */}
+        <div className="rounded-lg bg-sidebar-accent/50 px-3 py-2.5">
+          <p className="text-xs font-semibold text-sidebar-foreground/60 mb-2 uppercase tracking-wider">Paleta de color</p>
+          <div className="flex flex-wrap gap-2">
+            {PALETTES.map((p) => (
+              <button
+                key={p.id}
+                title={p.label}
+                onClick={() => setPalette(p.id as PaletteId)}
+                className={`h-6 w-6 rounded-full transition-all duration-200 ${
+                  palette === p.id
+                    ? 'ring-2 ring-offset-2 ring-offset-sidebar-accent/50 scale-110'
+                    : 'opacity-60 hover:opacity-100 hover:scale-110'
+                }`}
+                style={{
+                  backgroundColor: p.color,
+                  outline: palette === p.id ? `2px solid ${p.color}` : 'none',
+                  outlineOffset: palette === p.id ? '2px' : '0',
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Toggle Oscuro / Claro */}
+        <button
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          className="flex w-full items-center justify-between rounded-lg bg-sidebar-accent px-3 py-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/80 transition-colors"
+        >
+          <span>{resolvedTheme === "dark" ? "🌙 Modo Oscuro" : "☀️ Modo Claro"}</span>
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        </button>
+
+        {/* Cerrar Sesión */}
         <button
           onClick={logout}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-400/10 hover:text-red-500 transition-colors"
@@ -117,14 +158,7 @@ export function AppSidebar() {
           <LogOut className="h-5 w-5" />
           <span>Cerrar Sesión</span>
         </button>
-        
-        <button
-          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-          className="flex w-full items-center justify-between rounded-lg bg-sidebar-accent px-3 py-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/80 transition-colors"
-        >
-          <span>☀️ Tema: {resolvedTheme === "dark" ? "Oscuro" : "Claro"}</span>
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        </button>
+
       </div>
     </aside>
   )

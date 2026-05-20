@@ -40,13 +40,17 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        {/* Script inline para aplicar el tema guardado ANTES del primer render, evitando parpadeo */}
+        {/* Script inline para aplicar tema y paleta ANTES del primer render, evitando parpadeo */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               try {
                 var t = localStorage.getItem('app-theme') || 'dark';
                 document.documentElement.classList.add(t);
+                var p = localStorage.getItem('app-palette');
+                if (p && p !== 'azul') {
+                  document.documentElement.setAttribute('data-palette', p);
+                }
               } catch(e) {
                 document.documentElement.classList.add('dark');
               }
