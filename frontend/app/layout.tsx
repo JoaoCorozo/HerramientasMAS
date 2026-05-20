@@ -30,6 +30,7 @@ export const metadata: Metadata = {
 }
 
 import { AuthProvider } from '@/components/auth-provider'
+import { ThemeProvider } from '@/components/theme-provider'
 
 export default function RootLayout({
   children,
@@ -37,13 +38,16 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className="dark bg-background">
-      <body className="font-sans antialiased">
+    <html lang="es" suppressHydrationWarning>
+      <body className="font-sans antialiased bg-background">
         <AuthProvider>
-          {children}
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+            {children}
+          </ThemeProvider>
         </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )
 }
+

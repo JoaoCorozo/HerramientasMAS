@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useTheme } from "next-themes"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -39,8 +40,13 @@ const navItems: NavItem[] = [
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const [theme, setTheme] = useState<"dark" | "light">("dark")
+  const { theme, setTheme, resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const { user, logout } = useAuth()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Si no hay usuario, no renderizamos el sidebar (probablemente estamos en /login)
   if (!user) return null
@@ -112,10 +118,10 @@ export function AppSidebar() {
         </button>
         
         <button
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="flex w-full items-center justify-between rounded-lg bg-sidebar-accent px-3 py-2.5 text-sm font-medium text-sidebar-foreground"
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          className="flex w-full items-center justify-between rounded-lg bg-sidebar-accent px-3 py-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/80 transition-colors"
         >
-          <span>Tema: {theme === "dark" ? "Dark" : "Light"}</span>
+          <span>Tema: {mounted ? (resolvedTheme === "dark" ? "Oscuro" : "Claro") : "Cargando..."}</span>
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </button>
       </div>

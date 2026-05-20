@@ -168,7 +168,7 @@ export default function Home() {
           </div>
 
           <div className="mt-8">
-            <ResultsPanel status={status} />
+            <ResultsPanel status={status === "success" ? "complete" : (status === "error" ? "waiting" : status)} />
             {status === "error" && <p className="text-red-500 text-center mt-4">{errorMsg}</p>}
           </div>
         </div>
