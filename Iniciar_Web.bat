@@ -10,7 +10,7 @@ set INSTALL_DEPS=0
 if "%1"=="/install" set INSTALL_DEPS=1
 if "%1"=="--install" set INSTALL_DEPS=1
 
-if !INSTALL_DEPS!===1 (
+if "!INSTALL_DEPS!"=="1" (
     echo [1/3] Instalando dependencias del Backend...
     py -m pip install -r backend/requirements.txt
 ) else (
@@ -22,14 +22,16 @@ start "Backend (FastAPI)" cmd /k "cd backend && set DATABASE_URL=sqlite:///./use
 
 if not exist "frontend\node_modules\" (
     echo.
-    echo [3/3] frontend/node_modules no encontrado. Instalando dependencias del Frontend...
-    cd frontend && call npm install && cd ..
-) else if !INSTALL_DEPS!===1 (
-    echo.
-    echo [3/3] Forzando instalacion de dependencias del Frontend...
+    echo [3/3] frontend\node_modules no encontrado. Instalando dependencias del Frontend...
     cd frontend && call npm install && cd ..
 ) else (
-    echo [3/3] Dependencias del Frontend ya instaladas.
+    if "!INSTALL_DEPS!"=="1" (
+        echo.
+        echo [3/3] Forzando instalacion de dependencias del Frontend...
+        cd frontend && call npm install && cd ..
+    ) else (
+        echo [3/3] Dependencias del Frontend ya instaladas.
+    )
 )
 
 echo.
@@ -54,4 +56,5 @@ echo   Presiona CTRL + F5 (o CMD + SHIFT + R en Mac)
 echo ===================================================
 echo.
 echo Puedes minimizar esta ventana.
+
 
