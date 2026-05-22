@@ -5,7 +5,7 @@ echo ===================================================
 echo.
 
 echo Iniciando Backend (FastAPI)...
-start "Backend (FastAPI)" cmd /k "cd /d %~dp0backend && set DATABASE_URL=sqlite:///./users.db && py -m uvicorn main:app --reload --port 8000"
+start "Backend (FastAPI)" cmd /k "cd /d %~dp0backend && set DATABASE_URL=sqlite:///./users.db && set APP_ENV=development && set JWT_SECRET_KEY=dev-local-cambiar-en-produccion && set BOOTSTRAP_ADMIN_PASSWORD=admin123 && set CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000 && py -m uvicorn main:app --reload --port 8000"
 
 echo Iniciando Frontend (Next.js)...
 start "Frontend (Next.js)" cmd /k "cd /d %~dp0frontend && npm run dev"
@@ -21,6 +21,7 @@ echo.
 echo ===================================================
 echo Listo. Si la pagina no carga, espera 10 segundos mas
 echo y recarga con CTRL+F5.
+echo Cambie BOOTSTRAP_ADMIN_PASSWORD y la clave de admin tras el primer acceso.
 echo ===================================================
 echo.
 pause

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRef, useState } from "react"
+import { apiFetch } from "@/lib/api"
 import {
   Select,
   SelectContent,
@@ -44,9 +45,9 @@ export function FileUploadCard({
       try {
         const formData = new FormData()
         formData.append("file", selectedFile)
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/excel/hojas`, {
+        const res = await apiFetch("/api/excel/hojas", {
           method: "POST",
-          body: formData
+          body: formData,
         })
         const data = await res.json()
         if (data.hojas && data.hojas.length > 0) {

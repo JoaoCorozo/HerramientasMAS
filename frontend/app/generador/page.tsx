@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { Play, Upload, FileSpreadsheet, Package, RefreshCw, AlertCircle, ArrowLeft, ArrowRight, Check, Eye, HelpCircle } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
+import { apiFetch } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -31,7 +32,7 @@ interface PreviewProfile {
 }
 
 export default function GeneradorPage() {
-  const { token } = useAuth()
+  const { user } = useAuth()
   const [step, setStep] = useState(1)
   
   // File state
@@ -91,12 +92,9 @@ export default function GeneradorPage() {
         const formData = new FormData()
         formData.append("file", selectedFile)
         
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/excel/inspect`, {
+        const response = await apiFetch("/api/excel/inspect", {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
-          body: formData
+          body: formData,
         })
         
         if (!response.ok) {
@@ -230,12 +228,9 @@ export default function GeneradorPage() {
       formData.append("grupo", grupo)
       formData.append("mapping", JSON.stringify(getSelectedMappingPayload()))
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/excel/preview`, {
+      const response = await apiFetch("/api/excel/preview", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        body: formData
+        body: formData,
       })
 
       if (!response.ok) {
@@ -277,12 +272,9 @@ export default function GeneradorPage() {
       formData.append("grupo", grupo)
       formData.append("mapping", JSON.stringify(getSelectedMappingPayload()))
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/excel/generar-carga`, {
+      const response = await apiFetch("/api/excel/generar-carga", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        body: formData
+        body: formData,
       })
 
       if (!response.ok) {

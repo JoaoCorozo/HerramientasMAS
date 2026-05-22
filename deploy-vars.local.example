@@ -1,0 +1,22 @@
+# Plantilla — el script generate_deploy_vars.py crea deploy-vars.local.txt (no subir a git)
+
+# === NEON (solo en backend/.env, no copiar aquí la contraseña al chat) ===
+POSTGRES_DATABASE_URL=postgresql://...
+
+# === RENDER (pegar en Environment del Web Service) ===
+APP_ENV=production
+DATABASE_URL=<misma URL que Neon>
+JWT_SECRET_KEY=
+APP_ENCRYPTION_KEY=
+MATRIZ_CURSOS_PATH=/app/MATRIZ_CURSOS_BEX.xlsx
+CORS_ORIGINS=https://TU-APP.vercel.app
+PUBLIC_FRONTEND_URL=https://TU-APP.vercel.app
+CROSS_SITE_AUTH=false
+
+# === VERCEL (Root Directory: frontend) ===
+BACKEND_URL=https://TU-API.onrender.com
+NEXT_PUBLIC_API_URL=
+
+# === URLs después del deploy ===
+RENDER_API_URL=
+VERCEL_APP_URL=

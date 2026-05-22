@@ -3,12 +3,11 @@
 import { useState } from "react"
 import { Type, Copy, Play } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
-import { useAuth } from "@/components/auth-provider"
+import { apiFetch } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 export default function TextosPage() {
-  const { token } = useAuth()
   const [formato, setFormato] = useState("Mayúsculas")
   const [inputText, setInputText] = useState("")
   const [outputText, setOutputText] = useState("")
@@ -20,11 +19,10 @@ export default function TextosPage() {
     setLoading(true)
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/nombres/normalizar`, {
+      const response = await apiFetch("/api/nombres/normalizar", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
           nombres: inputText,

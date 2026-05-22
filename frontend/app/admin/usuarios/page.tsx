@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth, User } from "@/components/auth-provider"
+import { apiFetch } from "@/lib/api"
 import { Users, UserPlus, Pencil, Trash2 } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 
@@ -12,10 +13,11 @@ const MODULES = [
   { id: "capacitaciones", label: "Capacitaciones" },
   { id: "enlaces", label: "Enlaces" },
   { id: "recordatorios", label: "Recordatorios" },
+  { id: "generador", label: "Generador de Cargas" },
 ]
 
 export default function UsuariosPage() {
-  const { token, user } = useAuth()
+  const { user } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -28,11 +30,9 @@ export default function UsuariosPage() {
   const [permissions, setPermissions] = useState<string[]>([])
 
   const fetchUsers = async () => {
-    if (!token) return
+    if (!user) return
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await apiFetch("/api/users")
       if (res.ok) {
         setUsers(await res.json())
       }
@@ -45,11 +45,11 @@ export default function UsuariosPage() {
 
   useEffect(() => {
     fetchUsers()
-  }, [token])
+  }, [user])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!token) return
+    if (!user) return
 
     const payload = {
       username,
@@ -58,17 +58,16 @@ export default function UsuariosPage() {
       permissions
     }
 
-    const url = isEditing ? `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/users/${currentId}` : `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/users`
+    const path = isEditing ? `/api/users/${currentId}` : "/api/users"
     const method = isEditing ? "PUT" : "POST"
 
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(path, {
         method,
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
 
       if (res.ok) {
@@ -87,10 +86,7 @@ export default function UsuariosPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("¿Eliminar usuario?")) return
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/users/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await apiFetch(`/api/users/${id}`, { method: "DELETE" })
       if (res.ok) fetchUsers()
       else alert("Error eliminando usuario")
     } catch (error) {

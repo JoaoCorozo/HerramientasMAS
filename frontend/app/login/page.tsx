@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useAuth } from "@/components/auth-provider"
+import { apiFetch } from "@/lib/api"
 import { Lock, User } from "lucide-react"
 
 export default function LoginPage() {
@@ -21,7 +22,7 @@ export default function LoginPage() {
       formData.append("username", username)
       formData.append("password", password)
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/auth/login`, {
+      const response = await apiFetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -33,21 +34,14 @@ export default function LoginPage() {
         throw new Error("Credenciales incorrectas")
       }
 
-      const data = await response.json()
-      
-      const meResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${data.access_token}`,
-        },
-      })
-      
+      const meResponse = await apiFetch("/api/auth/me")
       if (!meResponse.ok) throw new Error("Error obteniendo usuario")
-      
-      const userData = await meResponse.json()
-      login(data.access_token, userData)
 
-    } catch (err: any) {
-      setError(err.message || "Error al iniciar sesión")
+      const userData = await meResponse.json()
+      login(userData)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error al iniciar sesión"
+      setError(message)
     } finally {
       setLoading(false)
     }

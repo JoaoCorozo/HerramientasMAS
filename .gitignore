@@ -15,6 +15,17 @@ build/
 
 # Archivos locales de entorno de Next
 .env*.local
+backend/.env
+deploy-vars.local.txt
+
+# Datos sensibles / PII
+backend/users.db
+backend/*.db
+*.csv
+*.xlsx
+!MATRIZ_CURSOS_BEX.xlsx
+backend/Joao_*.json
+*_db.json
 
 # Dependencias npm debug logs
 npm-debug.log*
@@ -24,3 +35,5 @@ yarn-error.log*
 # Archivos de caché
 .vercel/
 .turbo/
+*.tsbuildinfo
+test_generador_local.py

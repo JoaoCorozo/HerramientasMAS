@@ -34,7 +34,7 @@ const navItems: NavItem[] = [
   { icon: GraduationCap, label: "Capacitaciones Mod 1", href: "/capacitaciones", moduleName: "capacitaciones" },
   { icon: Link2, label: "Enlaces de Interes", href: "/enlaces", moduleName: "enlaces" },
   { icon: CalendarDays, label: "Calendario & Tareas", href: "/recordatorios", moduleName: "recordatorios" },
-  { icon: Package, label: "Generador de Cargas", href: "/generador" },
+  { icon: Package, label: "Generador de Cargas", href: "/generador", moduleName: "generador" },
 ]
 
 const PALETTES = [
@@ -61,7 +61,7 @@ export function AppSidebar() {
   // Filtramos los items según los permisos (el superadmin ve todo)
   const filteredNavItems = navItems.filter((item) => {
     if (user.role === "superadmin") return true
-    if (!item.moduleName) return true
+    if (!item.moduleName) return false
     return user.permissions.includes(item.moduleName)
   })
 

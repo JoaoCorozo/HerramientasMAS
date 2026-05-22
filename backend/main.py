@@ -1,5 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status, Body
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status, Body, Response
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -7,6 +7,10 @@ from pydantic import BaseModel
 import json
 import os
 import csv
+import shutil
+import tempfile
+import zipfile
+import unicodedata
 from datetime import datetime
 import openpyxl
 import asyncio
@@ -18,20 +22,35 @@ from email.mime.multipart import MIMEMultipart
 from database import engine, get_db, Base, SessionLocal
 import models
 import auth
+import config
+from deps import get_current_user, require_permission, check_login_rate_limit
+from security_utils import (
+    safe_upload_filename,
+    read_upload_limited,
+    escape_html,
+    protect_smtp_config,
+    expose_smtp_config,
+    smtp_config_for_mailer,
+    validate_permissions,
+    validate_role,
+    generic_error_detail,
+)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Herramientas API")
+app = FastAPI(
+    title="Herramientas API",
+    docs_url=None if config.IS_PRODUCTION else "/docs",
+    redoc_url=None if config.IS_PRODUCTION else "/redoc",
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 logger = logging.getLogger("recordatorios_mailer")
 
@@ -81,7 +100,7 @@ async def dispatcher_background_loop():
                         continue
                         
                     try:
-                        smtp_cfg = json.loads(smtp_rec.payload_json)
+                        smtp_cfg = smtp_config_for_mailer(json.loads(smtp_rec.payload_json))
                     except:
                         continue
                         
@@ -97,31 +116,31 @@ async def dispatcher_background_loop():
                                 tasks_html += f"""
                                 <div style="margin-bottom: 20px; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px; background-color: #fafafa; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                                     <div style="margin-bottom: 12px; border-bottom: 1px solid #f4f4f5; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                                        <span style="font-size: 16px; font-weight: bold; color: #8b5cf6;">📌 {t.get('titulo', 'Tarea')}</span>
-                                        <span style="font-size: 12px; color: #a1a1aa; background-color: #f4f4f5; padding: 4px 8px; border-radius: 4px; font-weight: bold;">📅 {date_str}</span>
+                                        <span style="font-size: 16px; font-weight: bold; color: #8b5cf6;">📌 {escape_html(t.get('titulo', 'Tarea'))}</span>
+                                        <span style="font-size: 12px; color: #a1a1aa; background-color: #f4f4f5; padding: 4px 8px; border-radius: 4px; font-weight: bold;">📅 {escape_html(date_str)}</span>
                                     </div>
-                                    <p style="margin: 0 0 12px 0; font-size: 14px; color: #3f3f46; line-height: 1.5;">{t.get('detalle', 'Sin detalles adicionales.')}</p>
+                                    <p style="margin: 0 0 12px 0; font-size: 14px; color: #3f3f46; line-height: 1.5;">{escape_html(t.get('detalle', 'Sin detalles adicionales.'))}</p>
                                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                                 """
                                 if t.get("curso"):
                                     tasks_html += f"""
                                         <tr>
                                             <td style="padding: 4px 0; font-weight: bold; color: #71717a; width: 100px;">📚 Curso ID:</td>
-                                            <td style="padding: 4px 0; color: #18181b;">{t.get('curso')}</td>
+                                            <td style="padding: 4px 0; color: #18181b;">{escape_html(t.get('curso'))}</td>
                                         </tr>
                                     """
                                 if t.get("grupo"):
                                     tasks_html += f"""
                                         <tr>
                                             <td style="padding: 4px 0; font-weight: bold; color: #71717a;">👥 Grupo:</td>
-                                            <td style="padding: 4px 0; color: #18181b;">{t.get('grupo')}</td>
+                                            <td style="padding: 4px 0; color: #18181b;">{escape_html(t.get('grupo'))}</td>
                                         </tr>
                                     """
                                 if t.get("asunto"):
                                     tasks_html += f"""
                                         <tr>
                                             <td style="padding: 4px 0; font-weight: bold; color: #71717a;">📝 Asunto:</td>
-                                            <td style="padding: 4px 0; color: #18181b;">{t.get('asunto')}</td>
+                                            <td style="padding: 4px 0; color: #18181b;">{escape_html(t.get('asunto'))}</td>
                                         </tr>
                                     """
                                 tasks_html += """
@@ -186,52 +205,78 @@ async def dispatcher_background_loop():
         except Exception as loop_err:
             logger.error(f"Error in dispatcher background loop: {loop_err}")
 
+DEFAULT_ADMIN_PERMISSIONS = json.dumps([
+    "comparador", "rut", "textos", "capacitaciones",
+    "enlaces", "recordatorios", "generador",
+])
+
+
 @app.on_event("startup")
 def startup_event():
     db = next(get_db())
     admin_user = db.query(models.User).filter(models.User.username == "admin").first()
-    if not admin_user:
-        hashed_pw = auth.get_password_hash("admin123")
+    if not admin_user and config.BOOTSTRAP_ADMIN_PASSWORD:
         admin_user = models.User(
-            username="admin", 
-            hashed_password=hashed_pw, 
-            role="superadmin", 
-            permissions_json='["comparador", "rut", "textos", "capacitaciones", "enlaces", "recordatorios"]'
+            username="admin",
+            hashed_password=auth.get_password_hash(config.BOOTSTRAP_ADMIN_PASSWORD),
+            role="superadmin",
+            permissions_json=DEFAULT_ADMIN_PERMISSIONS,
         )
         db.add(admin_user)
         db.commit()
+        logger.info("Usuario admin creado (BOOTSTRAP_ADMIN_PASSWORD). Cambie la contraseña tras el primer acceso.")
     asyncio.create_task(dispatcher_background_loop())
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    payload = auth.decode_access_token(token)
-    if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication credentials")
-    username: str = payload.get("sub")
-    if username is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication credentials")
-    user = db.query(models.User).filter(models.User.username == username).first()
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return user
 
-def require_permission(module_name: str):
-    def permission_checker(current_user: models.User = Depends(get_current_user)):
-        if current_user.role == "superadmin":
-            return current_user
-        user_permissions = json.loads(current_user.permissions_json)
-        if module_name not in user_permissions:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
-        return current_user
-    return permission_checker
+def set_auth_cookie(response: Response, access_token: str) -> None:
+    response.set_cookie(
+        key=config.COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        secure=config.COOKIE_SECURE,
+        samesite=config.COOKIE_SAMESITE,
+        max_age=config.COOKIE_MAX_AGE,
+        path="/",
+    )
+
+
+@app.get("/api/health")
+def health_check():
+    from paths import resolve_matriz_cursos_path
+    return {
+        "status": "ok",
+        "env": config.APP_ENV,
+        "database": "configured" if config.SQLALCHEMY_DATABASE_URL else "missing",
+        "matriz_cursos": bool(resolve_matriz_cursos_path()),
+    }
+
 
 @app.post("/api/auth/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    request: Request,
+    response: Response,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
+    check_login_rate_limit(request)
     user = db.query(models.User).filter(models.User.username == form_data.username).first()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Incorrect username or password")
-    
+        raise HTTPException(status_code=400, detail="Usuario o contraseña incorrectos")
+
     access_token = auth.create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+    set_auth_cookie(response, access_token)
+    return {"token_type": "bearer", "message": "ok"}
+
+
+@app.post("/api/auth/logout")
+def logout(response: Response):
+    response.delete_cookie(
+        key=config.COOKIE_NAME,
+        path="/",
+        secure=config.COOKIE_SECURE,
+        samesite=config.COOKIE_SAMESITE,
+    )
+    return {"message": "ok"}
 
 @app.get("/api/auth/me")
 def read_users_me(current_user: models.User = Depends(get_current_user)):
@@ -261,13 +306,20 @@ def create_user(user: UserCreate, current_user: models.User = Depends(get_curren
         raise HTTPException(status_code=403, detail="Not superadmin")
     if db.query(models.User).filter(models.User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Username already registered")
-    
+    if user.role == "superadmin" and current_user.username != config.ADMIN_MASTER_USER:
+        raise HTTPException(status_code=403, detail="Solo el administrador principal puede crear superadmins")
+
+    validate_role(user.role)
+    perms = validate_permissions(user.permissions)
+    if len(user.password) < 8:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
+
     hashed_password = auth.get_password_hash(user.password)
     db_user = models.User(
         username=user.username,
         hashed_password=hashed_password,
         role=user.role,
-        permissions_json=json.dumps(user.permissions)
+        permissions_json=json.dumps(perms)
     )
     db.add(db_user)
     db.commit()
@@ -282,11 +334,18 @@ def update_user(user_id: int, user: UserCreate, current_user: models.User = Depe
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    if user.role == "superadmin" and current_user.username != config.ADMIN_MASTER_USER and db_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="Solo el administrador principal puede asignar rol superadmin")
+
+    validate_role(user.role)
+    perms = validate_permissions(user.permissions)
     db_user.username = user.username
     if user.password:
+        if len(user.password) < 8:
+            raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
         db_user.hashed_password = auth.get_password_hash(user.password)
     db_user.role = user.role
-    db_user.permissions_json = json.dumps(user.permissions)
+    db_user.permissions_json = json.dumps(perms)
     db.commit()
     return {"status": "updated"}
 
@@ -367,13 +426,32 @@ def get_json_db(db_name: str, username: str, db_session: Session):
     
     if record and record.payload_json:
         try:
-            return json.loads(record.payload_json)
+            data = json.loads(record.payload_json)
+            if db_name == "smtp_config":
+                return expose_smtp_config(data, include_secret=True)
+            return data
         except:
             pass
     return {} if db_name == "recordatorios" else []
 
 def save_db(db_name: str, username: str, data, db_session: Session):
-    payload = json.dumps(data)
+    to_store = data
+    if db_name == "smtp_config" and isinstance(data, dict):
+        record = db_session.query(models.AppData).filter(
+            models.AppData.username == username,
+            models.AppData.module_name == db_name,
+        ).first()
+        existing_raw = {}
+        if record and record.payload_json:
+            try:
+                existing_raw = json.loads(record.payload_json)
+            except json.JSONDecodeError:
+                existing_raw = {}
+        merged = dict(data)
+        if not merged.get("password") and existing_raw.get("password"):
+            merged["password"] = existing_raw["password"]
+        to_store = protect_smtp_config(merged)
+    payload = json.dumps(to_store)
     record = db_session.query(models.AppData).filter(
         models.AppData.username == username,
         models.AppData.module_name == db_name
@@ -392,7 +470,7 @@ def read_db(db_name: str, current_user: models.User = Depends(get_current_user),
         user_permissions = json.loads(current_user.permissions_json)
         if db_name not in user_permissions and not (db_name == "smtp_config" and "recordatorios" in user_permissions):
             raise HTTPException(status_code=403, detail="Not enough permissions")
-    if db_name not in ["capacitaciones", "enlaces", "recordatorios", "smtp_config"]:
+    if db_name not in config.VALID_DB_MODULES:
         raise HTTPException(status_code=404, detail="DB not found")
     return get_json_db(db_name, current_user.username, db)
 
@@ -402,7 +480,7 @@ def write_db(db_name: str, data: dict | list = Body(...), current_user: models.U
         user_permissions = json.loads(current_user.permissions_json)
         if db_name not in user_permissions and not (db_name == "smtp_config" and "recordatorios" in user_permissions):
             raise HTTPException(status_code=403, detail="Not enough permissions")
-    if db_name not in ["capacitaciones", "enlaces", "recordatorios", "smtp_config"]:
+    if db_name not in config.VALID_DB_MODULES:
         raise HTTPException(status_code=404, detail="DB not found")
     save_db(db_name, current_user.username, data, db)
     return {"status": "success"}
@@ -442,16 +520,24 @@ def extraer_excel(path, col_ini_letra, col_fin_letra, fila_ini, fila_fin, hoja_n
 
 @app.post("/api/excel/hojas")
 async def get_excel_hojas(file: UploadFile = File(...), current_user: models.User = Depends(require_permission("comparador"))):
+    path = None
     try:
-        path = f"temp_{file.filename}"
-        with open(path, "wb") as f: f.write(await file.read())
+        safe_name = safe_upload_filename(file.filename)
+        content = await read_upload_limited(file)
+        path = os.path.join(tempfile.mkdtemp(), safe_name)
+        with open(path, "wb") as f:
+            f.write(content)
         wb = openpyxl.load_workbook(path, read_only=True)
         hojas = wb.sheetnames
         wb.close()
-        os.remove(path)
         return {"hojas": hojas}
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception:
         return {"hojas": []}
+    finally:
+        if path and os.path.exists(path):
+            shutil.rmtree(os.path.dirname(path), ignore_errors=True)
 
 
 
@@ -472,12 +558,19 @@ async def api_comparar(
     hoja2: str = Form("Activa (Por defecto)"),
     current_user: models.User = Depends(require_permission("comparador"))
 ):
+    path1 = path2 = None
+    temp_cmp = None
     try:
-        path1 = f"temp_{file1.filename}"
-        path2 = f"temp_{file2.filename}"
-        
-        with open(path1, "wb") as f: f.write(await file1.read())
-        with open(path2, "wb") as f: f.write(await file2.read())
+        temp_cmp = tempfile.mkdtemp()
+        safe1 = safe_upload_filename(file1.filename)
+        safe2 = safe_upload_filename(file2.filename)
+        path1 = os.path.join(temp_cmp, safe1)
+        path2 = os.path.join(temp_cmp, safe2)
+
+        with open(path1, "wb") as f:
+            f.write(await read_upload_limited(file1))
+        with open(path2, "wb") as f:
+            f.write(await read_upload_limited(file2))
             
         f_fin1_int = int(f_fin1) if f_fin1.isdigit() else None
         f_fin2_int = int(f_fin2) if f_fin2.isdigit() else None
@@ -534,21 +627,48 @@ async def api_comparar(
         out_name = f"Reporte_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         wb_out.save(out_name)
         
-        os.remove(path1)
-        os.remove(path2)
+        if temp_cmp:
+            shutil.rmtree(temp_cmp, ignore_errors=True)
 
         return FileResponse(path=out_name, filename=out_name, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=generic_error_detail(e, "comparación"))
+    finally:
+        if temp_cmp and os.path.isdir(temp_cmp):
+            shutil.rmtree(temp_cmp, ignore_errors=True)
 
 
 # === GENERADOR DE CARGAS / SCRIPTS DE INDUCCIÓN ===
-import zipfile
-import shutil
-import tempfile
-import unicodedata
 from fastapi import BackgroundTasks
+from paths import resolve_matriz_cursos_path
+
+
+def load_mapa_cursos_perfil(require_file: bool = False) -> dict:
+    matriz_path = resolve_matriz_cursos_path()
+    if not matriz_path:
+        if require_file:
+            raise HTTPException(
+                status_code=404,
+                detail="No se encontró MATRIZ_CURSOS_BEX.xlsx en el servidor. Configure MATRIZ_CURSOS_PATH.",
+            )
+        return {}
+
+    mapa_cursos_perfil = {}
+    wb_matriz = openpyxl.load_workbook(matriz_path, data_only=True)
+    for sname in wb_matriz.sheetnames:
+        sheet_mat = wb_matriz[sname]
+        cursos = []
+        for r_idx in range(3, sheet_mat.max_row + 1):
+            c_name = sheet_mat.cell(row=r_idx, column=1).value
+            if c_name and str(c_name).strip():
+                cursos.append(str(c_name).strip())
+        mapa_cursos_perfil[normalize_text(sname)] = cursos
+    wb_matriz.close()
+    return mapa_cursos_perfil
+
 
 def normalize_text(val):
     if val is None:
@@ -611,13 +731,14 @@ def process_row_mapping(row, col_name_to_idx, mapping, grupo, mapa_cursos_perfil
 @app.post("/api/excel/inspect")
 async def api_inspect_excel(
     file: UploadFile = File(...),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_permission("generador")),
 ):
     try:
         temp_dir = tempfile.mkdtemp()
-        path = os.path.join(temp_dir, file.filename)
+        safe_name = safe_upload_filename(file.filename)
+        path = os.path.join(temp_dir, safe_name)
         with open(path, "wb") as f:
-            f.write(await file.read())
+            f.write(await read_upload_limited(file))
             
         wb = openpyxl.load_workbook(path, read_only=True)
         sheets = {}
@@ -632,8 +753,10 @@ async def api_inspect_excel(
         wb.close()
         shutil.rmtree(temp_dir)
         return {"sheets": sheets}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al inspeccionar archivo: {str(e)}")
+        raise HTTPException(status_code=500, detail=generic_error_detail(e, "inspección del archivo"))
 
 @app.post("/api/excel/preview")
 async def api_preview_carga(
@@ -641,34 +764,19 @@ async def api_preview_carga(
     sheet_name: str = Form(...),
     grupo: str = Form(...),
     mapping: str = Form(...),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_permission("generador")),
 ):
     try:
         mapping_dict = json.loads(mapping)
         
         temp_dir = tempfile.mkdtemp()
-        path = os.path.join(temp_dir, file.filename)
+        safe_name = safe_upload_filename(file.filename)
+        path = os.path.join(temp_dir, safe_name)
         with open(path, "wb") as f:
-            f.write(await file.read())
+            f.write(await read_upload_limited(file))
             
-        matriz_name = "MATRIZ_CURSOS_BEX.xlsx"
-        matriz_path = os.path.join("..", matriz_name)
-        if not os.path.exists(matriz_path):
-            matriz_path = matriz_name
-            
-        mapa_cursos_perfil = {}
-        if os.path.exists(matriz_path):
-            wb_matriz = openpyxl.load_workbook(matriz_path, data_only=True)
-            for sname in wb_matriz.sheetnames:
-                sheet_mat = wb_matriz[sname]
-                cursos = []
-                for r_idx in range(3, sheet_mat.max_row + 1):
-                    c_name = sheet_mat.cell(row=r_idx, column=1).value
-                    if c_name and str(c_name).strip():
-                        cursos.append(str(c_name).strip())
-                mapa_cursos_perfil[normalize_text(sname)] = cursos
-            wb_matriz.close()
-            
+        mapa_cursos_perfil = load_mapa_cursos_perfil(require_file=False)
+
         wb_dot = openpyxl.load_workbook(path, data_only=True)
         if sheet_name not in wb_dot.sheetnames:
             raise HTTPException(status_code=400, detail=f"No se encontró la hoja '{sheet_name}' en el Excel.")
@@ -719,8 +827,10 @@ async def api_preview_carga(
                 previews[p_norm]["rows"].append(row_vals)
                 
         return {"previews": previews}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al generar previsualización: {str(e)}")
+        raise HTTPException(status_code=500, detail=generic_error_detail(e, "previsualización"))
 
 @app.post("/api/excel/generar-carga")
 async def api_generar_carga(
@@ -729,37 +839,19 @@ async def api_generar_carga(
     sheet_name: str = Form(...),
     grupo: str = Form(...),
     mapping: str = Form(...),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_permission("generador")),
 ):
     try:
         mapping_dict = json.loads(mapping)
         
         temp_dir = tempfile.mkdtemp()
-        path = os.path.join(temp_dir, file.filename)
+        safe_name = safe_upload_filename(file.filename)
+        path = os.path.join(temp_dir, safe_name)
         with open(path, "wb") as f:
-            f.write(await file.read())
+            f.write(await read_upload_limited(file))
             
-        matriz_name = "MATRIZ_CURSOS_BEX.xlsx"
-        matriz_path = os.path.join("..", matriz_name)
-        if not os.path.exists(matriz_path):
-            matriz_path = matriz_name
-            
-        if not os.path.exists(matriz_path):
-            raise HTTPException(status_code=404, detail="No se encontró la base de datos de cursos 'MATRIZ_CURSOS_BEX.xlsx' en el servidor.")
-            
-        wb_matriz = openpyxl.load_workbook(matriz_path, data_only=True)
-        mapa_cursos_perfil = {}
-        for sname in wb_matriz.sheetnames:
-            sheet_mat = wb_matriz[sname]
-            cursos = []
-            for r_idx in range(3, sheet_mat.max_row + 1):
-                c_name = sheet_mat.cell(row=r_idx, column=1).value
-                if c_name and str(c_name).strip():
-                    cursos.append(str(c_name).strip())
-            mapa_cursos_perfil[normalize_text(sname)] = cursos
-            
-        wb_matriz.close()
-        
+        mapa_cursos_perfil = load_mapa_cursos_perfil(require_file=True)
+
         wb_dot = openpyxl.load_workbook(path, data_only=True)
         if sheet_name not in wb_dot.sheetnames:
             raise HTTPException(status_code=400, detail=f"No se encontró la hoja '{sheet_name}' en el Excel.")
@@ -847,7 +939,9 @@ async def api_generar_carga(
         
     except HTTPException as he:
         raise he
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fallo al procesar: {str(e)}")
+        raise HTTPException(status_code=500, detail=generic_error_detail(e, "generación de cargas"))
 
 

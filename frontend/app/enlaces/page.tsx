@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Link2, Plus, Trash2, Search, Edit2, ExternalLink } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
+import { apiFetch } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -26,7 +27,7 @@ interface Enlace {
 }
 
 export default function EnlacesPage() {
-  const { token } = useAuth()
+  const { user } = useAuth()
   const [enlaces, setEnlaces] = useState<Enlace[]>([])
   const [filtered, setFiltered] = useState<Enlace[]>([])
   const [search, setSearch] = useState("")
@@ -41,8 +42,8 @@ export default function EnlacesPage() {
   const [notes, setNotes] = useState("")
 
   useEffect(() => {
-    if (token) fetchEnlaces()
-  }, [token])
+    if (user) fetchEnlaces()
+  }, [user])
 
   useEffect(() => {
     let result = enlaces
@@ -68,10 +69,8 @@ export default function EnlacesPage() {
 
   const fetchEnlaces = async () => {
     try {
-      if (!token) return
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/enlaces`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      if (!user) return
+      const res = await apiFetch("/api/db/enlaces")
       const data = await res.json()
       
       // Retrocompatibilidad (por si guardó "category" antes de este fix)
@@ -88,11 +87,10 @@ export default function EnlacesPage() {
 
   const saveEnlaces = async (newData: Enlace[]) => {
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/enlaces`, {
+      await apiFetch("/api/db/enlaces", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(newData),
       })

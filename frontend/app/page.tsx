@@ -4,13 +4,14 @@ import { useState } from "react"
 import { Zap } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
+import { apiFetch } from "@/lib/api"
 import { FileUploadCard } from "@/components/file-upload-card"
 import { ResultsPanel } from "@/components/results-panel"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 export default function Home() {
-  const { token } = useAuth()
+  useAuth()
   const [reportType, setReportType] = useState("diferencias")
   
   // Archivo 1
@@ -58,10 +59,9 @@ export default function Home() {
       if (cFin2) formData.append("c_fin2", cFin2)
       if (fFin2) formData.append("f_fin2", fFin2)
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/comparador`, {
+      const response = await apiFetch("/api/comparador", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
+        body: formData,
       })
       
       if (!response.ok) {

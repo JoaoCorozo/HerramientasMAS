@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { BookOpen, Plus, Trash2, ExternalLink, Search, Clock, Calendar } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
+import { apiFetch } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,7 +35,7 @@ interface Capacitacion {
 }
 
 export default function CapacitacionesPage() {
-  const { token } = useAuth()
+  const { user } = useAuth()
   const [capacitaciones, setCapacitaciones] = useState<Capacitacion[]>([])
   const [filtered, setFiltered] = useState<Capacitacion[]>([])
   const [search, setSearch] = useState("")
@@ -48,8 +49,8 @@ export default function CapacitacionesPage() {
   const [date, setDate] = useState("")
 
   useEffect(() => {
-    if (token) fetchCapacitaciones()
-  }, [token])
+    if (user) fetchCapacitaciones()
+  }, [user])
 
   useEffect(() => {
     if (!search) {
@@ -68,10 +69,8 @@ export default function CapacitacionesPage() {
 
   const fetchCapacitaciones = async () => {
     try {
-      if (!token) return
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/capacitaciones`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      if (!user) return
+      const res = await apiFetch("/api/db/capacitaciones")
       const data = await res.json()
       setCapacitaciones(data || [])
     } catch (e) {
@@ -81,11 +80,10 @@ export default function CapacitacionesPage() {
 
   const saveCapacitaciones = async (newData: Capacitacion[]) => {
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/capacitaciones`, {
+      await apiFetch("/api/db/capacitaciones", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(newData),
       })

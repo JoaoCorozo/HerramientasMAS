@@ -8,7 +8,7 @@ class User(Base):
     username = Column(String(50), unique=True, index=True)
     hashed_password = Column(String(255))
     role = Column(String(20), default="user") # "superadmin" or "user"
-    permissions_json = Column(String(500), default="[]") # JSON list of modules e.g. ["comparador", "rut"]
+    permissions_json = Column(String(2000), default="[]") # JSON list of modules e.g. ["comparador", "rut"]
 
 class AppData(Base):
     __tablename__ = "app_data"

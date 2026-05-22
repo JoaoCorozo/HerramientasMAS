@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Calendar as CalendarIcon, CheckCircle2, Circle, Plus, Trash2, ChevronLeft, ChevronRight, FileText, Mail, ClipboardPaste, Settings } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
+import { apiFetch } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,7 +36,7 @@ interface RecordatorioImport extends Recordatorio {
 type RecordatoriosDB = Record<string, Recordatorio[]>
 
 export default function RecordatoriosPage() {
-  const { token } = useAuth()
+  const { user } = useAuth()
   const [db, setDb] = useState<RecordatoriosDB>({})
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0])
@@ -71,10 +72,8 @@ export default function RecordatoriosPage() {
 
   const fetchSmtpConfig = async () => {
     try {
-      if (!token) return
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/smtp_config`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      if (!user) return
+      const res = await apiFetch("/api/db/smtp_config")
       if (res.ok) {
         const data = await res.json()
         if (data && data.host) {
@@ -93,12 +92,11 @@ export default function RecordatoriosPage() {
 
   const saveSmtpConfig = async () => {
     try {
-      if (!token) return
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/smtp_config`, {
+      if (!user) return
+      const res = await apiFetch("/api/db/smtp_config", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
           host: smtpHost,
@@ -122,17 +120,16 @@ export default function RecordatoriosPage() {
   }
 
   useEffect(() => {
-    if (token) {
+    if (user) {
       fetchRecordatorios()
       fetchSmtpConfig()
     }
-  }, [token])
+  }, [user])
 
   const fetchRecordatorios = async () => {
     try {
-      if (!token) return
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/recordatorios`, {
-        headers: { Authorization: `Bearer ${token}` },
+      if (!user) return
+      const res = await apiFetch("/api/db/recordatorios", {
         cache: "no-store"
       })
       const data = await res.json()
@@ -144,12 +141,11 @@ export default function RecordatoriosPage() {
 
   const saveRecordatorios = async (newDb: RecordatoriosDB) => {
     try {
-      if (!token) return
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/db/recordatorios`, {
+      if (!user) return
+      const res = await apiFetch("/api/db/recordatorios", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(newDb),
       })

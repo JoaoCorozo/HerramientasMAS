@@ -1,0 +1,23 @@
+# Blueprint Render: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: herramientas-bex-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: APP_ENCRYPTION_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PUBLIC_FRONTEND_URL
+        sync: false
+      - key: MATRIZ_CURSOS_PATH
+        value: /app/MATRIZ_CURSOS_BEX.xlsx

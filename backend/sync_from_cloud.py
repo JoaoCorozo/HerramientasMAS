@@ -1,16 +1,25 @@
 import os
 import sys
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env")
+except ImportError:
+    pass
 
 # Asegurar que el directorio de backend esté en el path para importar models
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import models
 
-# 1. Configuración de URLs
+# 1. Configuración de URLs (definir POSTGRES_DATABASE_URL en backend/.env)
 SQLITE_URL = "sqlite:///./users.db"
-# URL de producción oficial en Neon
-POSTGRES_URL = "postgresql://neondb_owner:npg_9HSUXfrkqB7C@ep-silent-leaf-acaw6aak.sa-east-1.aws.neon.tech/neondb?sslmode=require"
+POSTGRES_URL = os.getenv("POSTGRES_DATABASE_URL")
+if not POSTGRES_URL:
+    print("[ERROR] Defina POSTGRES_DATABASE_URL antes de sincronizar desde la nube.")
+    sys.exit(1)
 
 sqlite_engine = create_engine(SQLITE_URL)
 SqliteSession = sessionmaker(bind=sqlite_engine)
