@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Play, Upload, FileSpreadsheet, Package, RefreshCw, AlertCircle, ArrowLeft, ArrowRight, Check, Eye, HelpCircle } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { GeneradorProfileManager } from "@/components/generador-profile-manager"
 
 const STANDARD_COLUMNS = [
   "username", "institution", "password", "middlename", "department", "address", "aim", 
@@ -31,8 +32,17 @@ interface PreviewProfile {
   rows: string[][]
 }
 
+/** Prioriza hoja típica de dotación BEX (ej. "Formato enviar"). */
+function pickDotacionSheet(sheetNames: string[]): string {
+  if (!sheetNames.length) return ""
+  const exact = sheetNames.find((s) => s.toLowerCase() === "formato enviar")
+  if (exact) return exact
+  const partial = sheetNames.find((s) => /formato/i.test(s))
+  return partial || sheetNames[0]
+}
+
 export default function GeneradorPage() {
-  const { user } = useAuth()
+  useAuth()
   const [step, setStep] = useState(1)
   
   // File state
@@ -55,8 +65,25 @@ export default function GeneradorPage() {
   // Preview state
   const [previews, setPreviews] = useState<Record<string, PreviewProfile>>({})
   const [activePreviewTab, setActivePreviewTab] = useState("")
-  
+  const [matrizInfo, setMatrizInfo] = useState<{
+    loaded?: boolean
+    catalogo_cursos?: number
+    perfiles?: { hoja: string; cantidad_ids: number }[]
+    error?: string
+  } | null>(null)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const refreshMatrizInfo = useCallback(() => {
+    apiFetch("/api/excel/matriz-info")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setMatrizInfo(data))
+      .catch(() => setMatrizInfo({ loaded: false, error: "No se pudo leer la matriz de cursos" }))
+  }, [])
+
+  useEffect(() => {
+    refreshMatrizInfo()
+  }, [])
 
   // LocalStorage mapping persistence
   useEffect(() => {
@@ -104,12 +131,12 @@ export default function GeneradorPage() {
         
         const data = await response.json()
         setSheetsData(data.sheets)
-        
-        // Auto-select first sheet
-        const firstSheet = Object.keys(data.sheets)[0] || ""
-        setSelectedSheet(firstSheet)
-        if (firstSheet) {
-          autoConfigureMapping(firstSheet, data.sheets[firstSheet])
+
+        const sheetNames = Object.keys(data.sheets)
+        const preferredSheet = pickDotacionSheet(sheetNames)
+        setSelectedSheet(preferredSheet)
+        if (preferredSheet) {
+          autoConfigureMapping(preferredSheet, data.sheets[preferredSheet])
         }
         
         setStep(2)
@@ -124,18 +151,47 @@ export default function GeneradorPage() {
   }
 
   // Auto configure mapping using fuzzy logic
-  const autoConfigureMapping = (sheetName: string, headers: string[]) => {
+  const autoConfigureMapping = (_sheetName: string, headers: string[]) => {
     const findMatch = (patterns: string[]) => {
-      return headers.find(h => {
-        const upper = h.toUpperCase()
-        return patterns.some(p => upper.includes(p))
-      }) || ""
+      for (const pattern of patterns) {
+        const hit = headers.find((h) => h.toUpperCase().includes(pattern))
+        if (hit) return hit
+      }
+      return ""
     }
-    
-    const runHeader = findMatch(["RUN", "RUT", "IDENTIFICADOR", "CEDULA", "DNI"])
-    const nameHeader = findMatch(["NOMBRE", "FIRSTNAME", "COLABORADOR", "COMPLETO"])
-    const emailHeader = findMatch(["CORREO", "EMAIL", "MAIL", "CONTACTO"])
-    const perfilHeader = findMatch(["PERFIL", "DEPARTAMENTO", "DEPARTMENT", "INDUCCI", "CARGO"])
+
+    const runHeader = findMatch([
+      "RUN COLABORADOR",
+      "RUN",
+      "RUT",
+      "IDENTIFICADOR",
+      "CEDULA",
+      "DNI",
+    ])
+    const nameHeader = findMatch([
+      "NOMBRE COLABORADOR",
+      "NOMBRE COMPLETO",
+      "NOMBRE",
+      "FIRSTNAME",
+      "COLABORADOR",
+    ])
+    const emailHeader = findMatch([
+      "CORREO COLABORADOR",
+      "CORREO",
+      "EMAIL",
+      "MAIL",
+      "CONTACTO",
+    ])
+    const perfilHeader = findMatch([
+      "PERFIL DE INDUCCION",
+      "PERFIL DE INDUCCI",
+      "PERFIL PARA INDUCCION",
+      "PERFIL PARA INDUCCI",
+      "PERFIL INDUCCION",
+      "DEPARTAMENTO",
+      "DEPARTMENT",
+      "PERFIL",
+    ])
     
     const newMappings: Record<string, MappingConfig> = {}
     
@@ -152,7 +208,7 @@ export default function GeneradorPage() {
       } else if (col === "username" || col === "password" || col === "address") {
         newMappings[col] = { type: "column", value: runHeader }
       } else if (col === "firstname" || col === "lastname") {
-        newMappings[col] = { type: "column", value: nameHeader }
+        newMappings[col] = { type: "column", value: nameHeader || runHeader }
       } else if (col === "email") {
         newMappings[col] = { type: "column", value: emailHeader }
       } else if (col === "department") {
@@ -240,10 +296,20 @@ export default function GeneradorPage() {
 
       const data = await response.json()
       setPreviews(data.previews)
-      
+
+      if (data.warnings?.length) {
+        setErrorMsg(data.warnings.join(" "))
+      } else {
+        setErrorMsg("")
+      }
+
       const firstTab = Object.keys(data.previews)[0] || ""
       setActivePreviewTab(firstTab)
-      
+
+      if (Object.keys(data.previews).length === 0) {
+        return
+      }
+
       setStep(4)
     } catch (err: any) {
       console.error(err)
@@ -308,7 +374,7 @@ export default function GeneradorPage() {
       <AppSidebar />
 
       <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-5xl px-8 py-8">
+        <div className="mx-auto max-w-5xl min-w-0 px-8 py-8">
           
           <header className="mb-8">
             <div className="flex items-center gap-3">
@@ -320,7 +386,7 @@ export default function GeneradorPage() {
                   Generador de Cargas e Inducciones Pro
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Crea planillas CSV UTF-8 por perfil con mapeos a medida, previsualización en tiempo real y cruce de matriz de cursos.
+                  Crea planillas CSV UTF-8 por perfil. Catálogo Moodle en base de datos; perfiles editables en la app.
                 </p>
               </div>
             </div>
@@ -365,7 +431,35 @@ export default function GeneradorPage() {
             </div>
           </div>
 
-          <div className="grid gap-6">
+          <div className="grid gap-6 min-w-0">
+
+            <GeneradorProfileManager
+              matrizPerfiles={matrizInfo?.perfiles}
+              onMatrizChange={refreshMatrizInfo}
+            />
+
+            {matrizInfo && (
+              <div
+                className={`rounded-xl border p-4 text-sm ${
+                  matrizInfo.loaded
+                    ? "border-primary/30 bg-primary/5 text-foreground"
+                    : "border-destructive/30 bg-destructive/10 text-destructive"
+                }`}
+              >
+                {matrizInfo.loaded ? (
+                  <>
+                    <strong>Base de datos:</strong> {matrizInfo.catalogo_cursos} cursos Moodle,{" "}
+                    {matrizInfo.perfiles?.length ?? 0} perfiles de inducción configurados.
+                    El <strong>PERFIL DE INDUCCIÓN</strong> en la dotación debe coincidir con el nombre del perfil.
+                  </>
+                ) : (
+                  <>
+                    {matrizInfo.error ??
+                      "Catálogo vacío. Coloque «cursos bex Moodle.xlsx» en el servidor y reinicie, o use Sincronizar catálogo."}
+                  </>
+                )}
+              </div>
+            )}
             
             {/* PASO 1: Subida de Excel */}
             {step === 1 && (
@@ -436,11 +530,24 @@ export default function GeneradorPage() {
 
                   {/* Selección de Columnas Moodle */}
                   <div className="grid gap-3">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <Label className="text-sm font-semibold text-foreground">Columnas a Generar en Archivo de Salida</Label>
-                      <Button variant="ghost" size="sm" onClick={selectRecommendedColumns} className="text-xs text-primary font-bold hover:bg-primary/10">
-                        Usar Recomendadas Moodle
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="ghost" size="sm" onClick={selectRecommendedColumns} className="text-xs text-primary font-bold hover:bg-primary/10">
+                          Usar Recomendadas Moodle
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            selectRecommendedColumns()
+                            autoConfigureMapping(selectedSheet, currentSheetHeaders)
+                          }}
+                          className="text-xs text-primary font-bold hover:bg-primary/10"
+                        >
+                          Plantilla BEX (dotación)
+                        </Button>
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground -mt-1">
                       Haz clic en las columnas que necesitas. Las recomendadas ya se encuentran preseleccionadas.
@@ -593,7 +700,7 @@ export default function GeneradorPage() {
 
             {/* PASO 4: Previsualización de Datos en Tiempo Real */}
             {step === 4 && (
-              <div className="rounded-xl border border-border bg-card p-6 shadow-sm animate-fade-in">
+              <div className="rounded-xl border border-border bg-card p-6 shadow-sm animate-fade-in min-w-0 overflow-hidden">
                 <div className="flex justify-between items-center mb-6">
                   <div>
                     <h2 className="text-lg font-medium text-card-foreground">Previsualización de Archivos de Salida</h2>
@@ -632,31 +739,51 @@ export default function GeneradorPage() {
                         ))}
                       </div>
 
-                      {/* Tabla de Previsualización */}
+                      {/* Tabla de Previsualización (scroll solo dentro de este bloque) */}
                       {activePreviewTab && previews[activePreviewTab] && (
-                        <div className="border border-border rounded-xl overflow-hidden bg-card shadow-inner max-h-[400px] overflow-auto">
-                          <table className="w-full text-left border-collapse text-xs">
-                            <thead className="bg-muted sticky top-0">
-                              <tr>
-                                {previews[activePreviewTab].headers.map((h, i) => (
-                                  <th key={i} className="p-3 font-semibold border-b border-border whitespace-nowrap text-foreground bg-muted">
-                                    {h}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {previews[activePreviewTab].rows.map((row, rowIdx) => (
-                                <tr key={rowIdx} className="hover:bg-muted/40 transition-colors border-b border-border/50">
-                                  {row.map((val, cellIdx) => (
-                                    <td key={cellIdx} className="p-3 text-muted-foreground whitespace-nowrap truncate max-w-[200px]" title={val}>
-                                      {val === "" ? <span className="text-muted-foreground/30 italic">vacio</span> : val}
-                                    </td>
+                        <div className="w-full min-w-0 rounded-xl border border-border bg-card shadow-inner">
+                          <div
+                            className="h-[min(50vh,28rem)] w-full overflow-auto overscroll-contain"
+                            role="region"
+                            aria-label="Tabla de previsualización"
+                          >
+                            <table className="w-max min-w-full text-left border-collapse text-xs">
+                              <thead className="sticky top-0 z-10 bg-muted shadow-sm">
+                                <tr>
+                                  {previews[activePreviewTab].headers.map((h, i) => (
+                                    <th
+                                      key={i}
+                                      className="p-3 font-semibold border-b border-border whitespace-nowrap text-foreground bg-muted"
+                                    >
+                                      {h}
+                                    </th>
                                   ))}
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody>
+                                {previews[activePreviewTab].rows.map((row, rowIdx) => (
+                                  <tr
+                                    key={rowIdx}
+                                    className="hover:bg-muted/40 transition-colors border-b border-border/50"
+                                  >
+                                    {row.map((val, cellIdx) => (
+                                      <td
+                                        key={cellIdx}
+                                        className="p-3 text-muted-foreground whitespace-nowrap max-w-[240px] truncate"
+                                        title={val}
+                                      >
+                                        {val === "" ? (
+                                          <span className="text-muted-foreground/30 italic">vacio</span>
+                                        ) : (
+                                          val
+                                        )}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       )}
                     </>

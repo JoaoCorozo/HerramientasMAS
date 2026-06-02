@@ -119,7 +119,7 @@ async def dispatcher_background_loop():
                                         <span style="font-size: 16px; font-weight: bold; color: #8b5cf6;">📌 {escape_html(t.get('titulo', 'Tarea'))}</span>
                                         <span style="font-size: 12px; color: #a1a1aa; background-color: #f4f4f5; padding: 4px 8px; border-radius: 4px; font-weight: bold;">📅 {escape_html(date_str)}</span>
                                     </div>
-                                    <p style="margin: 0 0 12px 0; font-size: 14px; color: #3f3f46; line-height: 1.5;">{escape_html(t.get('detalle', 'Sin detalles adicionales.'))}</p>
+                                    <p style="margin: 0 0 12px 0; font-size: 14px; color: #3f3f46; line-height: 1.5;">{escape_html(t.get('cuerpo_mail') or t.get('detalle', 'Sin detalles adicionales.'))}</p>
                                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                                 """
                                 if t.get("curso"):
@@ -225,6 +225,14 @@ def startup_event():
         db.add(admin_user)
         db.commit()
         logger.info("Usuario admin creado (BOOTSTRAP_ADMIN_PASSWORD). Cambie la contraseña tras el primer acceso.")
+    try:
+        from matriz_db import ensure_matriz_seeded
+
+        ensure_matriz_seeded(db)
+    except Exception as e:
+        logger.warning("No se pudo importar matriz Moodle al iniciar: %s", e)
+    finally:
+        db.close()
     asyncio.create_task(dispatcher_background_loop())
 
 
@@ -403,18 +411,32 @@ class NombresInput(BaseModel):
     nombres: str
     formato: str
 
-@app.post("/api/nombres/normalizar")
-def normalizar_nombres(data: NombresInput, current_user: models.User = Depends(require_permission("textos"))):
-    nombres_limpios = data.nombres.replace("'", "").replace('"', "").replace('\r', '')
-    lista_nombres = [n.strip() for n in nombres_limpios.split('\n') if n.strip()]
-    
+def _normalizar_lista_textos(nombres: str, formato: str) -> dict:
+    nombres_limpios = nombres.replace("'", "").replace('"', "").replace("\r", "")
+    lista_nombres = [n.strip() for n in nombres_limpios.split("\n") if n.strip()]
+
     resultados = []
     for nom in lista_nombres:
-        if data.formato == "Mayúsculas": resultados.append(nom.upper())
-        elif data.formato == "Minúsculas": resultados.append(nom.lower())
-        else: resultados.append(nom.title())
-            
+        if formato == "Mayúsculas":
+            resultados.append(nom.upper())
+        elif formato == "Minúsculas":
+            resultados.append(nom.lower())
+        elif formato in ("Primera Letra Mayúscula", "Título", "Title"):
+            resultados.append(nom.title())
+        else:
+            resultados.append(nom.strip())
+
     return {"nombres": "\n".join(resultados), "total": len(resultados)}
+
+
+@app.post("/api/textos/normalizar")
+def normalizar_textos(data: NombresInput, current_user: models.User = Depends(require_permission("textos"))):
+    return _normalizar_lista_textos(data.nombres, data.formato)
+
+
+@app.post("/api/nombres/normalizar")
+def normalizar_nombres(data: NombresInput, current_user: models.User = Depends(require_permission("textos"))):
+    return _normalizar_lista_textos(data.nombres, data.formato)
 
 
 # === CRUD JSON ===
@@ -643,31 +665,29 @@ async def api_comparar(
 
 # === GENERADOR DE CARGAS / SCRIPTS DE INDUCCIÓN ===
 from fastapi import BackgroundTasks
-from paths import resolve_matriz_cursos_path
+from matriz_cursos import extract_perfil_from_row
+from matriz_db import (
+    courses_for_perfil as db_courses_for_perfil,
+    create_profile,
+    delete_profile,
+    ensure_matriz_seeded,
+    get_matriz_info_db,
+    list_courses,
+    list_profiles,
+    seed_profiles_from_excel,
+    sync_catalog_from_excel,
+    update_profile,
+)
 
 
-def load_mapa_cursos_perfil(require_file: bool = False) -> dict:
-    matriz_path = resolve_matriz_cursos_path()
-    if not matriz_path:
-        if require_file:
-            raise HTTPException(
-                status_code=404,
-                detail="No se encontró MATRIZ_CURSOS_BEX.xlsx en el servidor. Configure MATRIZ_CURSOS_PATH.",
-            )
-        return {}
+class ProfileCreateBody(BaseModel):
+    name: str
+    course_moodle_ids: list[int] = []
 
-    mapa_cursos_perfil = {}
-    wb_matriz = openpyxl.load_workbook(matriz_path, data_only=True)
-    for sname in wb_matriz.sheetnames:
-        sheet_mat = wb_matriz[sname]
-        cursos = []
-        for r_idx in range(3, sheet_mat.max_row + 1):
-            c_name = sheet_mat.cell(row=r_idx, column=1).value
-            if c_name and str(c_name).strip():
-                cursos.append(str(c_name).strip())
-        mapa_cursos_perfil[normalize_text(sname)] = cursos
-    wb_matriz.close()
-    return mapa_cursos_perfil
+
+class ProfileUpdateBody(BaseModel):
+    name: str | None = None
+    course_moodle_ids: list[int] | None = None
 
 
 def normalize_text(val):
@@ -687,7 +707,7 @@ def clean_username_rut(rut_val):
         r = r[:-1] + 'k'
     return r
 
-def process_row_mapping(row, col_name_to_idx, mapping, grupo, mapa_cursos_perfil):
+def process_row_mapping(row, col_name_to_idx, mapping, grupo, db: Session):
     processed_row = {}
     
     for out_col, cfg in mapping.items():
@@ -714,12 +734,16 @@ def process_row_mapping(row, col_name_to_idx, mapping, grupo, mapa_cursos_perfil
         else:
             processed_row[out_col] = str(raw_val).strip() if raw_val is not None else ""
             
-    # Get profile (from department if present)
     department_val = processed_row.get("department", "")
-    perfil_norm = normalize_text(department_val) if department_val else "SIN_PERFIL"
-    perfil_original = department_val if department_val else "SIN PERFIL"
-    
-    courses = mapa_cursos_perfil.get(perfil_norm, [])
+    perfil_original, perfil_norm = extract_perfil_from_row(
+        row,
+        col_name_to_idx,
+        processed_department=department_val,
+    )
+    if not perfil_original:
+        perfil_original = "SIN PERFIL"
+
+    courses = db_courses_for_perfil(db, perfil_norm, perfil_original)
     
     return {
         "processed_row": processed_row,
@@ -727,6 +751,95 @@ def process_row_mapping(row, col_name_to_idx, mapping, grupo, mapa_cursos_perfil
         "perfil_original": perfil_original,
         "courses": courses
     }
+
+@app.get("/api/excel/matriz-info")
+def api_matriz_info(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    return get_matriz_info_db(db)
+
+
+@app.get("/api/generador/cursos")
+def api_list_cursos(
+    search: str = "",
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    return {"cursos": list_courses(db, search=search)}
+
+
+@app.get("/api/generador/perfiles")
+def api_list_perfiles(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    return {"perfiles": list_profiles(db)}
+
+
+@app.post("/api/generador/perfiles")
+def api_create_perfil(
+    body: ProfileCreateBody,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    try:
+        profile = create_profile(db, body.name, body.course_moodle_ids)
+        return profile
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/generador/perfiles/{profile_id}")
+def api_update_perfil(
+    profile_id: int,
+    body: ProfileUpdateBody,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    try:
+        return update_profile(db, profile_id, body.name, body.course_moodle_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/generador/perfiles/{profile_id}")
+def api_delete_perfil(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    try:
+        delete_profile(db, profile_id)
+        return {"ok": True}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/generador/sync-catalogo")
+def api_sync_catalogo(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    n = sync_catalog_from_excel(db)
+    if n == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="No se encontró «cursos bex Moodle» para importar el catálogo.",
+        )
+    return {"importados": n}
+
+
+@app.post("/api/generador/reimportar-perfiles-excel")
+def api_reimportar_perfiles(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="Solo superadmin")
+    n = seed_profiles_from_excel(db, replace_existing=True)
+    return {"perfiles": n}
+
 
 @app.post("/api/excel/inspect")
 async def api_inspect_excel(
@@ -764,18 +877,18 @@ async def api_preview_carga(
     sheet_name: str = Form(...),
     grupo: str = Form(...),
     mapping: str = Form(...),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(require_permission("generador")),
 ):
     try:
         mapping_dict = json.loads(mapping)
-        
+        ensure_matriz_seeded(db)
+
         temp_dir = tempfile.mkdtemp()
         safe_name = safe_upload_filename(file.filename)
         path = os.path.join(temp_dir, safe_name)
         with open(path, "wb") as f:
             f.write(await read_upload_limited(file))
-            
-        mapa_cursos_perfil = load_mapa_cursos_perfil(require_file=False)
 
         wb_dot = openpyxl.load_workbook(path, data_only=True)
         if sheet_name not in wb_dot.sheetnames:
@@ -794,12 +907,15 @@ async def api_preview_carga(
         
         previews = {}
         data_rows = rows_dot[1:]
+        perfiles_sin_cursos: set[str] = set()
         
         for r in data_rows:
             if not any(r):
                 continue
                 
-            res = process_row_mapping(r, col_name_to_idx, mapping_dict, grupo, mapa_cursos_perfil)
+            res = process_row_mapping(r, col_name_to_idx, mapping_dict, grupo, db)
+            if not res["courses"] and res["perfil_norm"] != "SIN_PERFIL":
+                perfiles_sin_cursos.add(res["perfil_original"])
             p_norm = res["perfil_norm"]
             p_original = res["perfil_original"]
             processed_row = res["processed_row"]
@@ -825,8 +941,23 @@ async def api_preview_carga(
                     row_vals.append(grupo)
                     row_vals.append(course)
                 previews[p_norm]["rows"].append(row_vals)
-                
-        return {"previews": previews}
+
+        warnings = []
+        if perfiles_sin_cursos:
+            info = get_matriz_info_db(db)
+            nombres = ", ".join(p["hoja"] for p in info.get("perfiles", []))
+            warnings.append(
+                "Perfiles sin cursos asignados: "
+                + ", ".join(sorted(perfiles_sin_cursos))
+                + f". Cree o edite el perfil en «Perfiles de inducción» (disponibles: {nombres})."
+                + " El valor de PERFIL DE INDUCCIÓN debe coincidir con el nombre del perfil."
+            )
+        if not previews:
+            warnings.append(
+                "No se generaron filas. Verifique usuario/RUT y que exista columna PERFIL DE INDUCCIÓN."
+            )
+
+        return {"previews": previews, "warnings": warnings}
     except HTTPException:
         raise
     except Exception as e:
@@ -839,18 +970,18 @@ async def api_generar_carga(
     sheet_name: str = Form(...),
     grupo: str = Form(...),
     mapping: str = Form(...),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(require_permission("generador")),
 ):
     try:
         mapping_dict = json.loads(mapping)
-        
+        ensure_matriz_seeded(db)
+
         temp_dir = tempfile.mkdtemp()
         safe_name = safe_upload_filename(file.filename)
         path = os.path.join(temp_dir, safe_name)
         with open(path, "wb") as f:
             f.write(await read_upload_limited(file))
-            
-        mapa_cursos_perfil = load_mapa_cursos_perfil(require_file=True)
 
         wb_dot = openpyxl.load_workbook(path, data_only=True)
         if sheet_name not in wb_dot.sheetnames:
@@ -871,7 +1002,7 @@ async def api_generar_carga(
             if not any(r):
                 continue
                 
-            res = process_row_mapping(r, col_name_to_idx, mapping_dict, grupo, mapa_cursos_perfil)
+            res = process_row_mapping(r, col_name_to_idx, mapping_dict, grupo, db)
             p_norm = res["perfil_norm"]
             p_original = res["perfil_original"]
             processed_row = res["processed_row"]

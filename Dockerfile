@@ -6,7 +6,7 @@ COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend/ ./backend/
-COPY MATRIZ_CURSOS_BEX.xlsx ./MATRIZ_CURSOS_BEX.xlsx
+COPY "cursos bex Moodle.xlsx" ./cursos bex Moodle.xlsx
 
 WORKDIR /app/backend
 

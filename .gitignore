@@ -23,7 +23,9 @@ backend/users.db
 backend/*.db
 *.csv
 *.xlsx
-!MATRIZ_CURSOS_BEX.xlsx
+*.xls
+!cursos bex Moodle.xlsx
+!cursos bex Moodle.xls
 backend/Joao_*.json
 *_db.json
 

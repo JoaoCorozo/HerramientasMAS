@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 openpyxl
+xlrd
 pydantic
 sqlalchemy
 pyjwt

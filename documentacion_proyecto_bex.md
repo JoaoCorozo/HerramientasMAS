@@ -168,7 +168,8 @@ comparador | rut | textos | capacitaciones | enlaces | recordatorios
 | Método | Ruta | Permiso | Descripción |
 |--------|------|---------|-------------|
 | POST | `/api/rut/normalizar` | `rut` | Normaliza RUT chileno (con/sin puntos, con/sin guión) |
-| POST | `/api/nombres/normalizar` | `textos` | Normaliza texto (mayúsculas/minúsculas/título) |
+| POST | `/api/textos/normalizar` | `textos` | Normaliza texto (mayúsculas/minúsculas/título) |
+| POST | `/api/nombres/normalizar` | `textos` | Alias legacy del normalizador de textos |
 
 ### Base de Datos JSON (módulos con persistencia)
 | Método | Ruta | Descripción |

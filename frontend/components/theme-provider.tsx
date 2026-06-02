@@ -1,69 +1,92 @@
 'use client'
 
 import * as React from 'react'
+import { type ColorMode, type ThemePreset, isThemePreset } from '@/lib/themes'
 
-type Theme = 'dark' | 'light'
-type Palette = 'azul' | 'violeta' | 'verde' | 'naranja' | 'rosa' | 'cyan' | 'rojo' | 'ambar'
+const STORAGE_THEME = 'app-theme'
+const STORAGE_PRESET = 'app-theme-preset'
+const STORAGE_PRESET_LEGACY = 'app-palette'
 
 interface ThemeContextValue {
-  resolvedTheme: Theme
-  palette: Palette
-  setTheme: (theme: Theme) => void
-  setPalette: (palette: Palette) => void
+  resolvedTheme: ColorMode
+  themePreset: ThemePreset
+  setTheme: (theme: ColorMode) => void
+  setThemePreset: (preset: ThemePreset) => void
+  /** @deprecated use setThemePreset */
+  setPalette: (preset: ThemePreset) => void
+  /** @deprecated use themePreset */
+  palette: ThemePreset
 }
 
 const ThemeContext = React.createContext<ThemeContextValue>({
   resolvedTheme: 'dark',
-  palette: 'azul',
+  themePreset: 'azul',
   setTheme: () => {},
+  setThemePreset: () => {},
   setPalette: () => {},
+  palette: 'azul',
 })
 
+function readStoredPreset(): ThemePreset {
+  if (typeof window === 'undefined') return 'azul'
+  const preset =
+    localStorage.getItem(STORAGE_PRESET) ??
+    localStorage.getItem(STORAGE_PRESET_LEGACY)
+  return preset && isThemePreset(preset) ? preset : 'azul'
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [resolvedTheme, setResolvedTheme] = React.useState<Theme>('dark')
-  const [palette, setPaletteState] = React.useState<Palette>('azul')
+  const [resolvedTheme, setResolvedTheme] = React.useState<ColorMode>('dark')
+  const [themePreset, setThemePresetState] = React.useState<ThemePreset>('azul')
 
   React.useEffect(() => {
-    const savedTheme = (localStorage.getItem('app-theme') as Theme) ?? 'dark'
-    const savedPalette = (localStorage.getItem('app-palette') as Palette) ?? 'azul'
+    const savedTheme = (localStorage.getItem(STORAGE_THEME) as ColorMode) ?? 'dark'
+    const savedPreset = readStoredPreset()
     applyTheme(savedTheme)
-    applyPalette(savedPalette)
+    applyThemePreset(savedPreset)
     setResolvedTheme(savedTheme)
-    setPaletteState(savedPalette)
+    setThemePresetState(savedPreset)
+    localStorage.setItem(STORAGE_PRESET, savedPreset)
   }, [])
 
-  const setTheme = React.useCallback((newTheme: Theme) => {
-    localStorage.setItem('app-theme', newTheme)
+  const setTheme = React.useCallback((newTheme: ColorMode) => {
+    localStorage.setItem(STORAGE_THEME, newTheme)
     applyTheme(newTheme)
     setResolvedTheme(newTheme)
   }, [])
 
-  const setPalette = React.useCallback((newPalette: Palette) => {
-    localStorage.setItem('app-palette', newPalette)
-    applyPalette(newPalette)
-    setPaletteState(newPalette)
+  const setThemePreset = React.useCallback((newPreset: ThemePreset) => {
+    localStorage.setItem(STORAGE_PRESET, newPreset)
+    localStorage.removeItem(STORAGE_PRESET_LEGACY)
+    applyThemePreset(newPreset)
+    setThemePresetState(newPreset)
   }, [])
 
   return (
-    <ThemeContext.Provider value={{ resolvedTheme, palette, setTheme, setPalette }}>
+    <ThemeContext.Provider
+      value={{
+        resolvedTheme,
+        themePreset,
+        palette: themePreset,
+        setTheme,
+        setThemePreset,
+        setPalette: setThemePreset,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   )
 }
 
-function applyTheme(theme: Theme) {
+function applyTheme(theme: ColorMode) {
   const root = document.documentElement
   root.classList.remove('dark', 'light')
   root.classList.add(theme)
 }
 
-function applyPalette(palette: Palette) {
-  // 'azul' es la paleta por defecto — no requiere data-palette
-  if (palette === 'azul') {
-    document.documentElement.removeAttribute('data-palette')
-  } else {
-    document.documentElement.setAttribute('data-palette', palette)
-  }
+function applyThemePreset(preset: ThemePreset) {
+  document.documentElement.setAttribute('data-theme', preset)
+  document.documentElement.removeAttribute('data-palette')
 }
 
 export function useTheme() {

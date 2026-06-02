@@ -7,7 +7,9 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? ""
 
 export function apiUrl(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`
-  return `${API_BASE}${normalized}`
+  if (!API_BASE) return normalized
+  const base = API_BASE.replace(/\/+$/, "")
+  return `${base}${normalized}`
 }
 
 export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {

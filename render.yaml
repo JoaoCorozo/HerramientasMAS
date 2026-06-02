@@ -20,4 +20,4 @@ services:
       - key: PUBLIC_FRONTEND_URL
         sync: false
       - key: MATRIZ_CURSOS_PATH
-        value: /app/MATRIZ_CURSOS_BEX.xlsx
+        value: /app/cursos bex Moodle.xlsx

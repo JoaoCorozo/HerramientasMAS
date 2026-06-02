@@ -47,10 +47,8 @@ export default function RootLayout({
               try {
                 var t = localStorage.getItem('app-theme') || 'dark';
                 document.documentElement.classList.add(t);
-                var p = localStorage.getItem('app-palette');
-                if (p && p !== 'azul') {
-                  document.documentElement.setAttribute('data-palette', p);
-                }
+                var p = localStorage.getItem('app-theme-preset') || localStorage.getItem('app-palette') || 'azul';
+                document.documentElement.setAttribute('data-theme', p);
               } catch(e) {
                 document.documentElement.classList.add('dark');
               }

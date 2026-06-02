@@ -5,6 +5,12 @@ import { Calendar as CalendarIcon, CheckCircle2, Circle, Plus, Trash2, ChevronLe
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 import { apiFetch } from "@/lib/api"
+import {
+  buildMailComposerUrl,
+  recordatorioToMailPrefill,
+  validateRecordatorioForMail,
+} from "@/lib/mail-composer"
+import { MailComposerLaunchDialog } from "@/components/mail-composer-launch-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,7 +28,9 @@ interface Recordatorio {
   detalle: string
   curso: string
   grupo: string
+  grupo_id?: string
   asunto: string
+  cuerpo_mail: string
   ruta: string
   completada: boolean
   correo_notificacion?: string
@@ -58,8 +66,12 @@ export default function RecordatoriosPage() {
   const [curso, setCurso] = useState("")
   const [grupo, setGrupo] = useState("")
   const [asunto, setAsunto] = useState("")
+  const [cuerpoMail, setCuerpoMail] = useState("")
+  const [grupoId, setGrupoId] = useState("")
   const [ruta, setRuta] = useState("")
   const [correoNotificacion, setCorreoNotificacion] = useState("")
+  const [composerLaunchTask, setComposerLaunchTask] = useState<Recordatorio | null>(null)
+  const [composerLaunchOpen, setComposerLaunchOpen] = useState(false)
 
   // Configuración SMTP
   const [smtpOpen, setSmtpOpen] = useState(false)
@@ -273,7 +285,15 @@ export default function RecordatoriosPage() {
 
   const handleOpenNew = () => {
     setEditingIndex(null)
-    setTitulo(""); setDetalle(""); setCurso(""); setGrupo(""); setAsunto(""); setRuta(""); setCorreoNotificacion("")
+    setTitulo("")
+    setDetalle("")
+    setCurso("")
+    setGrupo("")
+    setGrupoId("")
+    setAsunto("")
+    setCuerpoMail("")
+    setRuta("")
+    setCorreoNotificacion("")
     setIsOpen(true)
   }
 
@@ -284,26 +304,35 @@ export default function RecordatoriosPage() {
     setDetalle(evt.detalle || "")
     setCurso(evt.curso || "")
     setGrupo(evt.grupo || "")
+    setGrupoId(evt.grupo_id || "")
     setAsunto(evt.asunto || "")
+    setCuerpoMail(evt.cuerpo_mail || evt.detalle || "")
     setRuta(evt.ruta || "")
     setCorreoNotificacion(evt.correo_notificacion || "")
     setIsOpen(true)
   }
 
+  const buildRecordatorioFromForm = (): Recordatorio => ({
+    titulo: titulo.trim(),
+    detalle: detalle.trim(),
+    curso: curso.trim(),
+    grupo: grupo.trim(),
+    grupo_id: grupoId.trim() || undefined,
+    asunto: asunto.trim(),
+    cuerpo_mail: cuerpoMail.trim(),
+    ruta: ruta.trim(),
+    completada: false,
+    correo_notificacion: correoNotificacion.trim(),
+    notificado: false,
+  })
+
   const handleSave = () => {
-    if (!titulo) return alert("El título es obligatorio")
-    
-    const nuevo: Recordatorio = {
-      titulo, 
-      detalle, 
-      curso, 
-      grupo, 
-      asunto, 
-      ruta, 
-      completada: false,
-      correo_notificacion: correoNotificacion,
-      notificado: false
-    }
+    if (!titulo.trim()) return alert("El título es obligatorio")
+    const draft = buildRecordatorioFromForm()
+    const mailErr = validateRecordatorioForMail(draft)
+    if (mailErr) return alert(mailErr)
+
+    const nuevo: Recordatorio = { ...draft }
     
     const newDb = JSON.parse(JSON.stringify(db))
     if (!newDb[selectedDate]) newDb[selectedDate] = []
@@ -361,6 +390,22 @@ export default function RecordatoriosPage() {
     }
   }
 
+  const openMailComposer = (evt: Recordatorio, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    const mailErr = validateRecordatorioForMail(evt)
+    if (mailErr) {
+      alert(mailErr)
+      return
+    }
+    const url = buildMailComposerUrl(recordatorioToMailPrefill(evt))
+    const win = window.open(url, "_blank", "noopener,noreferrer")
+    if (!win) {
+      alert("El navegador bloqueó la ventana emergente. Permita ventanas emergentes para este sitio.")
+    }
+    setComposerLaunchTask(evt)
+    setComposerLaunchOpen(true)
+  }
+
   const handleImport = () => {
     if (!pasteText.trim()) return alert("Pega los datos del Excel primero")
     
@@ -395,6 +440,7 @@ export default function RecordatoriosPage() {
             curso: "",
             grupo: "",
             asunto: "",
+            cuerpo_mail: "",
             ruta: "",
             completada: false,
             correo_notificacion: "",
@@ -419,13 +465,20 @@ export default function RecordatoriosPage() {
     const newDb = JSON.parse(JSON.stringify(db))
     
     if (save) {
+      const mailErr = validateRecordatorioForMail(current)
+      if (mailErr) {
+        alert(mailErr)
+        return
+      }
       if (!newDb[current.dateStr]) newDb[current.dateStr] = []
       newDb[current.dateStr].push({
         titulo: current.titulo,
         detalle: current.detalle,
         curso: current.curso,
         grupo: current.grupo,
+        grupo_id: current.grupo_id,
         asunto: current.asunto,
+        cuerpo_mail: current.cuerpo_mail || current.detalle || "",
         ruta: current.ruta,
         completada: current.completada,
         correo_notificacion: current.correo_notificacion || "",
@@ -510,11 +563,15 @@ export default function RecordatoriosPage() {
               <Button size="sm" onClick={() => setIsImportOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 px-2" title="Pegar desde Excel">
                 <ClipboardPaste className="h-4 w-4" />
               </Button>
-              <a href="https://www.gestiondepersonasbex.cl/api/mail_composer.php?key=YD6eLhj8W55FZmd7k-7Xw0MHlvZx7DMq9vEjCz8xYijubE1O" target="_blank" rel="noreferrer" title="Abrir Mail Composer">
-                <Button size="sm" variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/10 hover:text-orange-600 px-2">
-                  <Mail className="h-4 w-4" />
-                </Button>
-              </a>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-orange-500 text-orange-500 hover:bg-orange-500/10 hover:text-orange-600 px-2"
+                title="Mail Composer (vacío)"
+                onClick={() => window.open(buildMailComposerUrl(), "_blank", "noopener,noreferrer")}
+              >
+                <Mail className="h-4 w-4" />
+              </Button>
               <Button size="sm" onClick={handleOpenNew} className="bg-orange-600 hover:bg-orange-700 px-2" title="Nueva Tarea">
                 <Plus className="h-4 w-4" />
               </Button>
@@ -544,21 +601,40 @@ export default function RecordatoriosPage() {
                       </h3>
                       {evt.curso && <p className="text-xs font-medium text-orange-500 mt-1">Curso ID: {evt.curso}</p>}
                       {evt.grupo && <p className="text-xs text-muted-foreground mt-1 truncate">{evt.grupo}</p>}
+                      {evt.asunto && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate">Asunto: {evt.asunto}</p>
+                      )}
                       {evt.correo_notificacion && (
                         <p className={`text-[11px] font-semibold mt-1 px-2 py-0.5 rounded-md w-max ${evt.notificado ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>
                           📧 {evt.correo_notificacion} {evt.notificado ? '✓ (Enviado)' : '(Pendiente 9:00 AM)'}
                         </p>
                       )}
-                      <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{evt.detalle}</p>
+                      {(evt.cuerpo_mail || evt.detalle) && (
+                        <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                          {evt.cuerpo_mail || evt.detalle}
+                        </p>
+                      )}
                     </div>
                   </div>
+
+                  {!evt.completada && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="mt-3 w-full gap-2 bg-purple-600 hover:bg-purple-700"
+                      onClick={(e) => openMailComposer(evt, e)}
+                    >
+                      <Mail className="h-4 w-4" />
+                      Abrir Mail Composer (campos listos)
+                    </Button>
+                  )}
                   
-                  <div className="absolute bottom-3 right-3 flex items-center gap-2 opacity-90 group-hover:opacity-100 transition-opacity">
+                  <div className="flex flex-wrap justify-end gap-1 mt-2 opacity-90 group-hover:opacity-100 transition-opacity">
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         const title = encodeURIComponent(evt.titulo);
-                        const details = encodeURIComponent(`${evt.detalle}\n\nCurso ID: ${evt.curso}\nGrupo: ${evt.grupo}\nAsunto: ${evt.asunto}\nRuta: ${evt.ruta}`);
+                        const details = encodeURIComponent(`${evt.cuerpo_mail || evt.detalle}\n\nCurso ID: ${evt.curso}\nGrupo: ${evt.grupo}\nAsunto: ${evt.asunto}\nRuta: ${evt.ruta}`);
                         const cleanDate = selectedDate.replace(/-/g, "");
                         window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${cleanDate}/${cleanDate}&details=${details}`, "_blank");
                       }}
@@ -598,42 +674,70 @@ export default function RecordatoriosPage() {
             <DialogTitle>{editingIndex !== null ? "Detalles / Editar Tarea" : `Nueva Tarea (${selectedDate})`}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto px-2">
+            <p className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-lg p-3">
+              Complete los datos del correo. El día de la tarea use el botón morado para abrir el Mail Composer con
+              curso, grupo, asunto y cuerpo <strong>ya rellenados</strong>; usted revisa y envía manualmente.
+            </p>
+
             <div className="grid gap-2">
-              <Label>Título *</Label>
+              <Label>Título de la tarea *</Label>
               <Input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Correo de Bienvenida" />
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 p-3 space-y-4">
+              <p className="text-sm font-semibold text-purple-700 dark:text-purple-300">Datos para Mail Composer *</p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Curso (ID Moodle) *</Label>
+                    <button type="button" onClick={() => copyToClipboard(curso)} className="text-xs text-blue-500 hover:underline">Copiar</button>
+                  </div>
+                  <Input value={curso} onChange={e => setCurso(e.target.value)} placeholder="Ej: 44" required />
+                </div>
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Grupo (nombre) *</Label>
+                    <button type="button" onClick={() => copyToClipboard(grupo)} className="text-xs text-blue-500 hover:underline">Copiar</button>
+                  </div>
+                  <Input value={grupo} onChange={e => setGrupo(e.target.value)} placeholder="Ej: Grupo 05 de mayo..." required />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>ID de grupo Moodle (opcional)</Label>
+                <Input value={grupoId} onChange={e => setGrupoId(e.target.value)} placeholder="Ej: 12345 — si lo conoce, selección más exacta" />
+              </div>
+
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
-                  <Label>Curso (ID)</Label>
-                  <button onClick={() => copyToClipboard(curso)} className="text-xs text-blue-500 hover:underline">Copiar</button>
+                  <Label>Asunto del correo *</Label>
+                  <button type="button" onClick={() => copyToClipboard(asunto)} className="text-xs text-blue-500 hover:underline">Copiar</button>
                 </div>
-                <Input value={curso} onChange={e => setCurso(e.target.value)} placeholder="Ej: 44" />
+                <Input value={asunto} onChange={e => setAsunto(e.target.value)} placeholder="Ej: Bienvenida a Inducción" required />
               </div>
+
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
-                  <Label>Grupo</Label>
-                  <button onClick={() => copyToClipboard(grupo)} className="text-xs text-blue-500 hover:underline">Copiar</button>
+                  <Label>Cuerpo del correo *</Label>
+                  <button type="button" onClick={() => copyToClipboard(cuerpoMail)} className="text-xs text-blue-500 hover:underline">Copiar</button>
                 </div>
-                <Input value={grupo} onChange={e => setGrupo(e.target.value)} placeholder="Ej: Grupo 05 de May..." />
+                <Textarea
+                  value={cuerpoMail}
+                  onChange={e => setCuerpoMail(e.target.value)}
+                  className="min-h-[140px] font-mono text-sm"
+                  placeholder="Texto del correo. Puede usar {{firstname}}, {{lastname}}, {{email}} si el composer lo soporta."
+                  required
+                />
               </div>
             </div>
-            
+
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <Label>Asunto del Correo</Label>
-                <button onClick={() => copyToClipboard(asunto)} className="text-xs text-blue-500 hover:underline">Copiar</button>
+                <Label>Notas internas (opcional)</Label>
+                <button type="button" onClick={() => copyToClipboard(detalle)} className="text-xs text-blue-500 hover:underline">Copiar</button>
               </div>
-              <Input value={asunto} onChange={e => setAsunto(e.target.value)} placeholder="Ej: Bienvenida a Inducción" />
-            </div>
-            
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between">
-                <Label>Detalle / Descripción</Label>
-                <button onClick={() => copyToClipboard(detalle)} className="text-xs text-blue-500 hover:underline">Copiar</button>
-              </div>
-              <Textarea value={detalle} onChange={e => setDetalle(e.target.value)} className="min-h-[80px]" />
+              <Textarea value={detalle} onChange={e => setDetalle(e.target.value)} className="min-h-[60px]" placeholder="Anotaciones que no se envían en el correo" />
             </div>
             
             <div className="grid gap-2">
@@ -650,7 +754,15 @@ export default function RecordatoriosPage() {
               <span className="text-[10px] text-muted-foreground">Si ingresas un correo, el sistema le enviará un recordatorio automático el día de la tarea a las 9:00 AM.</span>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-purple-500/50 text-purple-600"
+              onClick={() => openMailComposer(buildRecordatorioFromForm())}
+            >
+              <Mail className="h-4 w-4 mr-1" /> Probar Mail Composer
+            </Button>
             <Button onClick={handleSave} className="bg-orange-600 hover:bg-orange-700">Guardar Tarea</Button>
           </DialogFooter>
         </DialogContent>
@@ -698,23 +810,33 @@ export default function RecordatoriosPage() {
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label>Curso (ID)</Label>
+                  <Label>Curso (ID) *</Label>
                   <Input value={importQueue[currentImportIndex].curso} onChange={e => handleUpdateCurrentImport('curso', e.target.value)} placeholder="Ej: 44" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Grupo</Label>
+                  <Label>Grupo *</Label>
                   <Input value={importQueue[currentImportIndex].grupo} onChange={e => handleUpdateCurrentImport('grupo', e.target.value)} placeholder="Ej: Grupo 05..." />
                 </div>
               </div>
+
+              <div className="grid gap-2">
+                <Label>ID de grupo (opcional)</Label>
+                <Input value={importQueue[currentImportIndex].grupo_id || ""} onChange={e => handleUpdateCurrentImport('grupo_id', e.target.value)} placeholder="Ej: 12345" />
+              </div>
               
               <div className="grid gap-2">
-                <Label>Asunto del Correo</Label>
+                <Label>Asunto del correo *</Label>
                 <Input value={importQueue[currentImportIndex].asunto} onChange={e => handleUpdateCurrentImport('asunto', e.target.value)} placeholder="Ej: Bienvenida" />
               </div>
               
               <div className="grid gap-2">
-                <Label>Detalle / Descripción</Label>
-                <Textarea value={importQueue[currentImportIndex].detalle} onChange={e => handleUpdateCurrentImport('detalle', e.target.value)} className="min-h-[80px]" />
+                <Label>Cuerpo del correo *</Label>
+                <Textarea value={importQueue[currentImportIndex].cuerpo_mail || ""} onChange={e => handleUpdateCurrentImport('cuerpo_mail', e.target.value)} className="min-h-[120px]" />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Notas internas (opcional)</Label>
+                <Textarea value={importQueue[currentImportIndex].detalle} onChange={e => handleUpdateCurrentImport('detalle', e.target.value)} className="min-h-[60px]" />
               </div>
               
               <div className="grid gap-2">
@@ -782,6 +904,12 @@ export default function RecordatoriosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MailComposerLaunchDialog
+        open={composerLaunchOpen}
+        onOpenChange={setComposerLaunchOpen}
+        task={composerLaunchTask}
+      />
     </div>
   )
 }
