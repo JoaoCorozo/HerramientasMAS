@@ -1,0 +1,26 @@
+---
+description: Contexto y convenciones de la Plataforma Herramientas BEX (Web)
+alwaysApply: true
+---
+
+# Plataforma Herramientas BEX
+
+Antes de implementar cambios, lee `CURSOR_CONTEXTO.md` en la raíz del repo.
+
+## Stack
+- Frontend: Next.js 16 + React 19 + TypeScript + Tailwind (`frontend/`)
+- Backend: FastAPI + SQLAlchemy (`backend/`)
+- Local: `Iniciar_Web.bat` → :3000 + :8000
+
+## Reglas rápidas
+- Diff mínimo; reutilizar `apiFetch`, shadcn, `matriz_db.py`.
+- Generador: perfiles y catálogo en **BD** (`moodle_courses`, `induction_profiles`); Excel solo `cursos bex Moodle.xlsx`.
+- Recordatorios: campos mail = curso, grupo, asunto, `cuerpo_mail`; URL Mail Composer vía `frontend/lib/mail-composer.ts`.
+- No commitear: `users.db`, `.env`, `cookies.txt`, datos de prueba.
+- Commits/push solo si el usuario lo pide; mensajes en español.
+- No usar `next-themes` (usar `theme-provider.tsx` propio).
+
+## Docs
+- Handover completo: `CURSOR_CONTEXTO.md`
+- Manual usuario: `docs/MANUAL_USUARIO_PLATAFORMA_BEX.md`
+- Deploy: `DEPLOY_NUBE.md`
