@@ -25,9 +25,14 @@ backend/*.db
 *.xlsx
 *.xls
 !cursos bex Moodle.xlsx
-!cursos bex Moodle.xls
 backend/Joao_*.json
 *_db.json
+
+# Archivos de prueba / temporales en raíz
+prueba/
+mc_test.html
+antigravity_context.md
+test_generador_local.py
 
 # Dependencias npm debug logs
 npm-debug.log*
@@ -38,4 +43,3 @@ yarn-error.log*
 .vercel/
 .turbo/
 *.tsbuildinfo
-test_generador_local.py
