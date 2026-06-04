@@ -6,7 +6,13 @@ from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 
-from config import APP_ENCRYPTION_KEY, MAX_UPLOAD_BYTES, VALID_MODULES
+from config import (
+    APP_ENCRYPTION_KEY,
+    MAX_UPLOAD_BYTES,
+    MAX_VIDEO_BATCH_BYTES,
+    MAX_VIDEO_UPLOAD_BYTES,
+    VALID_MODULES,
+)
 
 _FILENAME_UNSAFE = re.compile(r"[^a-zA-Z0-9._-]+")
 
@@ -31,7 +37,36 @@ def safe_upload_filename(original: str | None) -> str:
     return f"{safe_stem}.{ext}"
 
 
-async def read_upload_limited(file: UploadFile) -> bytes:
+VIDEO_EXTENSIONS = frozenset({".mp4", ".mov", ".avi", ".webm", ".mkv", ".m4v"})
+
+
+def safe_video_filename(original: str | None) -> str:
+    name = Path(original or "video.mp4").name
+    if name in (".", "..") or ".." in name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nombre de archivo no válido.",
+        )
+    stem, dot, ext = name.rpartition(".")
+    if not dot:
+        stem, ext = name, "mp4"
+    ext = f".{ext.lower()}"
+    if ext not in VIDEO_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato de video no soportado. Use mp4, mov, avi, webm, mkv o m4v.",
+        )
+    safe_stem = _FILENAME_UNSAFE.sub("_", stem)[:80] or "video"
+    return f"{safe_stem}{ext}"
+
+
+async def read_upload_limited(
+    file: UploadFile,
+    *,
+    max_bytes: int | None = None,
+    label: str = "archivo",
+) -> bytes:
+    limit = max_bytes if max_bytes is not None else MAX_UPLOAD_BYTES
     chunks: list[bytes] = []
     total = 0
     while True:
@@ -39,13 +74,45 @@ async def read_upload_limited(file: UploadFile) -> bytes:
         if not chunk:
             break
         total += len(chunk)
-        if total > MAX_UPLOAD_BYTES:
+        if total > limit:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"El archivo supera el límite de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+                detail=f"El {label} supera el límite de {limit // (1024 * 1024)} MB.",
             )
         chunks.append(chunk)
     return b"".join(chunks)
+
+
+async def read_video_upload_limited(file: UploadFile) -> bytes:
+    return await read_upload_limited(
+        file,
+        max_bytes=MAX_VIDEO_UPLOAD_BYTES,
+        label="video",
+    )
+
+
+async def stream_video_upload_to_file(
+    file: UploadFile,
+    dest: Path,
+    *,
+    max_bytes: int | None = None,
+) -> int:
+    limit = max_bytes if max_bytes is not None else MAX_VIDEO_UPLOAD_BYTES
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    total = 0
+    with dest.open("wb") as handle:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > limit:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"El video supera el límite de {limit // (1024 * 1024)} MB.",
+                )
+            handle.write(chunk)
+    return total
 
 
 def escape_html(value) -> str:

@@ -37,7 +37,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    apiFetch("/api/auth/me")
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+
+    apiFetch("/api/auth/me", { signal: controller.signal })
       .then((res) => {
         if (res.ok) return res.json()
         throw new Error("No autenticado")
@@ -53,9 +56,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           router.push("/login")
         }
       })
+      .finally(() => clearTimeout(timeout))
+
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
   }, [])
 
   useEffect(() => {
+    if (!isLoading && user && pathname === "/login") {
+      router.push("/")
+      return
+    }
     if (!isLoading && !user && pathname !== "/login") {
       router.push("/login")
     }
@@ -66,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/")
   }
 
-  if (isLoading) {
+  if (isLoading && pathname !== "/login") {
     return (
       <div className="flex items-center justify-center h-screen bg-background text-foreground">
         Cargando...

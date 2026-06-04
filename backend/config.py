@@ -34,6 +34,8 @@ if PUBLIC_FRONTEND_URL and PUBLIC_FRONTEND_URL not in CORS_ORIGINS:
     CORS_ORIGINS.append(PUBLIC_FRONTEND_URL)
 
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(20 * 1024 * 1024)))
+MAX_VIDEO_UPLOAD_BYTES = int(os.getenv("MAX_VIDEO_UPLOAD_BYTES", str(500 * 1024 * 1024)))
+MAX_VIDEO_BATCH_BYTES = int(os.getenv("MAX_VIDEO_BATCH_BYTES", str(2 * 1024 * 1024 * 1024)))
 
 VALID_ROLES = frozenset({"user", "superadmin"})
 VALID_MODULES = frozenset({

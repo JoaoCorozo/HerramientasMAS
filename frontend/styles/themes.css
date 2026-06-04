@@ -1,8 +1,7 @@
 /* Temas visuales completos: data-theme en <html> + clase .dark / .light */
 
 /* —— Azul (default) —— */
-:root,
-[data-theme="azul"] {
+html:not(.dark)[data-theme="azul"] {
   --background: oklch(0.98 0.008 265);
   --foreground: oklch(0.2 0.02 265);
   --card: oklch(1 0.005 265);
@@ -31,7 +30,6 @@
   --app-glow: oklch(0.55 0.2 255 / 0.12);
 }
 
-.dark,
 .dark[data-theme="azul"] {
   --background: oklch(0.15 0.02 265);
   --foreground: oklch(0.97 0.005 265);
@@ -62,7 +60,7 @@
 }
 
 /* —— Violeta —— */
-[data-theme="violeta"] {
+html:not(.dark)[data-theme="violeta"] {
   --background: oklch(0.97 0.02 300);
   --foreground: oklch(0.22 0.06 300);
   --card: oklch(0.99 0.01 300);
@@ -120,7 +118,7 @@
 }
 
 /* —— Verde —— */
-[data-theme="verde"] {
+html:not(.dark)[data-theme="verde"] {
   --background: oklch(0.97 0.02 155);
   --foreground: oklch(0.2 0.05 155);
   --card: oklch(0.99 0.01 155);
@@ -178,7 +176,7 @@
 }
 
 /* —— Naranja —— */
-[data-theme="naranja"] {
+html:not(.dark)[data-theme="naranja"] {
   --background: oklch(0.98 0.015 55);
   --foreground: oklch(0.22 0.05 45);
   --card: oklch(1 0.01 55);
@@ -236,7 +234,7 @@
 }
 
 /* —— Rosa —— */
-[data-theme="rosa"] {
+html:not(.dark)[data-theme="rosa"] {
   --background: oklch(0.97 0.02 350);
   --foreground: oklch(0.22 0.06 350);
   --card: oklch(0.99 0.01 350);
@@ -294,7 +292,7 @@
 }
 
 /* —— Cyan —— */
-[data-theme="cyan"] {
+html:not(.dark)[data-theme="cyan"] {
   --background: oklch(0.97 0.02 200);
   --foreground: oklch(0.2 0.05 200);
   --card: oklch(0.99 0.01 200);
@@ -352,7 +350,7 @@
 }
 
 /* —— Rojo —— */
-[data-theme="rojo"] {
+html:not(.dark)[data-theme="rojo"] {
   --background: oklch(0.98 0.015 25);
   --foreground: oklch(0.22 0.06 25);
   --card: oklch(1 0.01 25);
@@ -410,7 +408,7 @@
 }
 
 /* —— Ámbar —— */
-[data-theme="ambar"] {
+html:not(.dark)[data-theme="ambar"] {
   --background: oklch(0.98 0.02 80);
   --foreground: oklch(0.22 0.05 70);
   --card: oklch(1 0.015 80);

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status, Body, Response
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status, Body, Response, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -26,7 +26,10 @@ import config
 from deps import get_current_user, require_permission, check_login_rate_limit
 from security_utils import (
     safe_upload_filename,
+    safe_video_filename,
     read_upload_limited,
+    read_video_upload_limited,
+    stream_video_upload_to_file,
     escape_html,
     protect_smtp_config,
     expose_smtp_config,
@@ -231,6 +234,12 @@ def startup_event():
         ensure_matriz_seeded(db)
     except Exception as e:
         logger.warning("No se pudo importar matriz Moodle al iniciar: %s", e)
+    try:
+        from transelec_db import ensure_transelec_seeded
+
+        ensure_transelec_seeded(db)
+    except Exception as e:
+        logger.warning("No se pudo inicializar catálogo Transelec: %s", e)
     finally:
         db.close()
     asyncio.create_task(dispatcher_background_loop())
@@ -267,8 +276,20 @@ def login(
     db: Session = Depends(get_db),
 ):
     check_login_rate_limit(request)
-    user = db.query(models.User).filter(models.User.username == form_data.username).first()
-    if not user or not auth.verify_password(form_data.password, user.hashed_password):
+    username = (form_data.username or "").strip()
+    user = db.query(models.User).filter(models.User.username == username).first()
+    if not user:
+        user = (
+            db.query(models.User)
+            .filter(models.User.username.ilike(username))
+            .first()
+        )
+    try:
+        password_ok = user and auth.verify_password(form_data.password, user.hashed_password)
+    except Exception:
+        logger.exception("Error verificando contraseña para usuario %s", username)
+        password_ok = False
+    if not password_ok:
         raise HTTPException(status_code=400, detail="Usuario o contraseña incorrectos")
 
     access_token = auth.create_access_token(data={"sub": user.username})
@@ -664,7 +685,6 @@ async def api_comparar(
 
 
 # === GENERADOR DE CARGAS / SCRIPTS DE INDUCCIÓN ===
-from fastapi import BackgroundTasks
 from matriz_cursos import extract_perfil_from_row
 from matriz_db import (
     courses_for_perfil as db_courses_for_perfil,
@@ -1075,4 +1095,84 @@ async def api_generar_carga(
     except Exception as e:
         raise HTTPException(status_code=500, detail=generic_error_detail(e, "generación de cargas"))
 
+
+from transelec_routes import router as transelec_router
+
+app.include_router(transelec_router)
+
+# === GENERADOR DE PAQUETES DE VIDEO ===
+from pathlib import Path as FsPath
+from video_packages import (
+    crear_zip_lote,
+    generar_paquetes_video,
+    validar_nombre_carpeta,
+    validar_url_curso,
+)
+
+
+@app.post("/api/generador/videos/generar")
+async def api_generar_paquetes_video(
+    background_tasks: BackgroundTasks,
+    nombre_lote: str = Form(...),
+    course_url: str = Form(...),
+    videos: list[UploadFile] = File(...),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    error = validar_nombre_carpeta(nombre_lote)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    error = validar_url_curso(course_url)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    if not videos:
+        raise HTTPException(status_code=400, detail="Agrega al menos un video.")
+
+    temp_dir = tempfile.mkdtemp()
+    saved_paths: list[FsPath] = []
+    total_bytes = 0
+
+    try:
+        for upload in videos:
+            safe_name = safe_video_filename(upload.filename)
+            dest = FsPath(temp_dir) / f"{len(saved_paths)}_{safe_name}"
+            file_size = await stream_video_upload_to_file(upload, dest)
+            total_bytes += file_size
+            if total_bytes > config.MAX_VIDEO_BATCH_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        f"El total de videos supera el límite de "
+                        f"{config.MAX_VIDEO_BATCH_BYTES // (1024 * 1024)} MB."
+                    ),
+                )
+            saved_paths.append(dest)
+
+        lote_dir = generar_paquetes_video(
+            FsPath(temp_dir),
+            nombre_lote.strip(),
+            course_url.strip(),
+            saved_paths,
+        )
+
+        zip_name = f"{nombre_lote.strip()}.zip"
+        zip_path = FsPath(temp_dir) / zip_name
+        crear_zip_lote(lote_dir, zip_path)
+
+        dest_zip = os.path.abspath(zip_name)
+        shutil.copy(zip_path, dest_zip)
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+        background_tasks.add_task(os.remove, dest_zip)
+        return FileResponse(dest_zip, filename=zip_name, media_type="application/zip")
+    except HTTPException:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+    except Exception as e:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(
+            status_code=500,
+            detail=generic_error_detail(e, "generación de paquetes de video"),
+        )
 

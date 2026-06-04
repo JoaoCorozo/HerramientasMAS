@@ -3,6 +3,7 @@ from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
+PLANTILLA_VIDEO_DIR = BACKEND_DIR / "plantilla_video"
 
 CURSOS_BEX_MOODLE_NAMES = (
     "cursos bex Moodle.xlsx",

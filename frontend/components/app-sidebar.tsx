@@ -12,9 +12,10 @@ import {
   LayoutGrid,
   LogOut,
   Users,
-  Package,
+  Film,
 } from "lucide-react"
 import { ThemeSettings } from "@/components/theme-settings"
+import { GeneradorNominaMenu } from "@/components/generador-nomina-menu"
 import { cn } from "@/lib/utils"
 import { useAuth } from "./auth-provider"
 
@@ -32,25 +33,44 @@ const navItems: NavItem[] = [
   { icon: GraduationCap, label: "Capacitaciones Mod 1", href: "/capacitaciones", moduleName: "capacitaciones" },
   { icon: Link2, label: "Enlaces de Interes", href: "/enlaces", moduleName: "enlaces" },
   { icon: CalendarDays, label: "Calendario & Tareas", href: "/recordatorios", moduleName: "recordatorios" },
-  { icon: Package, label: "Generador de Cargas", href: "/generador", moduleName: "generador" },
 ]
+
+function canAccessModule(
+  user: NonNullable<ReturnType<typeof useAuth>["user"]>,
+  moduleName: string
+) {
+  if (user.role === "superadmin") return true
+  return user.permissions.includes(moduleName)
+}
+
+function isVideoPath(pathname: string) {
+  return pathname === "/generador/videos" || pathname.startsWith("/generador/videos/")
+}
+
+function isNominaPath(pathname: string) {
+  return (
+    pathname === "/generador" ||
+    (pathname.startsWith("/generador/") && !isVideoPath(pathname))
+  )
+}
 
 export function AppSidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
 
-  // Si no hay usuario, no renderizamos el sidebar (probablemente estamos en /login)
   if (!user) return null
 
-  // Filtramos los items según los permisos (el superadmin ve todo)
   const filteredNavItems = navItems.filter((item) => {
-    if (user.role === "superadmin") return true
     if (!item.moduleName) return false
-    return user.permissions.includes(item.moduleName)
+    return canAccessModule(user, item.moduleName)
   })
 
+  const showGenerador = canAccessModule(user, "generador")
+  const generadorActive = isNominaPath(pathname) || isVideoPath(pathname)
+  const videoActive = isVideoPath(pathname)
+
   return (
-    <aside className="flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border">
+    <aside className="relative z-[90] flex h-screen w-64 shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
       <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
           <LayoutGrid className="h-5 w-5 text-primary" />
@@ -58,7 +78,7 @@ export function AppSidebar() {
         <span className="text-base font-semibold text-sidebar-foreground">Herramientas</span>
       </div>
 
-      <nav className="flex-1 px-3 py-4">
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-1">
           {filteredNavItems.map((item) => {
             const isActive = pathname === item.href
@@ -79,9 +99,39 @@ export function AppSidebar() {
               </li>
             )
           })}
+
+          {showGenerador && (
+            <li className="pt-2">
+              <div
+                className={cn(
+                  "px-3 py-2 text-[11px] font-semibold uppercase tracking-wide",
+                  generadorActive ? "text-primary" : "text-sidebar-foreground/50"
+                )}
+              >
+                Generador de Cargas
+              </div>
+              <ul className="space-y-1">
+                <GeneradorNominaMenu />
+                <li>
+                  <Link
+                    href="/generador/videos"
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-lg py-2.5 pl-6 pr-3 text-sm font-medium transition-colors",
+                      videoActive
+                        ? "bg-sidebar-accent text-primary"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    )}
+                  >
+                    <Film className="h-4 w-4 shrink-0" />
+                    Paquetes de Video
+                  </Link>
+                </li>
+              </ul>
+            </li>
+          )}
         </ul>
 
-        <div className="mt-4 pt-4 border-t border-sidebar-border space-y-1">
+        <div className="mt-4 space-y-1 border-t border-sidebar-border pt-4">
           {user.role === "superadmin" && (
             <Link
               href="/admin/usuarios"
@@ -99,19 +149,16 @@ export function AppSidebar() {
         </div>
       </nav>
 
-      <div className="px-3 py-4 border-t border-sidebar-border space-y-1">
-
+      <div className="space-y-1 border-t border-sidebar-border px-3 py-4">
         <ThemeSettings />
 
-        {/* Cerrar Sesión */}
         <button
           onClick={logout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-400/10 hover:text-red-500 transition-colors"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-400/10 hover:text-red-500"
         >
           <LogOut className="h-5 w-5" />
           <span>Cerrar Sesión</span>
         </button>
-
       </div>
     </aside>
   )
