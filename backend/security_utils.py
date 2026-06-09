@@ -37,6 +37,47 @@ def safe_upload_filename(original: str | None) -> str:
     return f"{safe_stem}.{ext}"
 
 
+def safe_csv_filename(original: str | None) -> str:
+    name = Path(original or "upload.csv").name
+    if name in (".", "..") or ".." in name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nombre de archivo no válido.",
+        )
+    stem, dot, ext = name.rpartition(".")
+    if not dot:
+        stem, ext = name, "csv"
+    ext = ext.lower()
+    if ext != "csv":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo se permiten archivos CSV (.csv).",
+        )
+    safe_stem = _FILENAME_UNSAFE.sub("_", stem)[:80] or "upload"
+    return f"{safe_stem}.{ext}"
+
+
+def safe_planilla_filename(original: str | None) -> str:
+    """Excel o CSV para planillas de generador (Resiter, Transelec, etc.)."""
+    name = Path(original or "upload.csv").name
+    if name in (".", "..") or ".." in name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nombre de archivo no válido.",
+        )
+    stem, dot, ext = name.rpartition(".")
+    if not dot:
+        stem, ext = name, "csv"
+    ext = ext.lower()
+    if ext not in ("csv", "xlsx", "xls"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo se permiten archivos CSV (.csv) o Excel (.xlsx, .xls).",
+        )
+    safe_stem = _FILENAME_UNSAFE.sub("_", stem)[:80] or "upload"
+    return f"{safe_stem}.{ext}"
+
+
 VIDEO_EXTENSIONS = frozenset({".mp4", ".mov", ".avi", ".webm", ".mkv", ".m4v"})
 
 

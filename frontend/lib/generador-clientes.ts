@@ -35,7 +35,18 @@ export const GENERADOR_NAV_CLIENTES: GeneradorNavCliente[] = [
       { label: "Externos", href: "/generador/transelec/matriz" },
     ],
   },
-  { id: "aza", nombre: "AZA", disponible: false, procesos: [] },
+  {
+    id: "aza",
+    nombre: "AZA",
+    disponible: true,
+    procesos: [{ label: "Comparar nóminas", href: "/generador/aza" }],
+  },
+  {
+    id: "resiter",
+    nombre: "Resiter",
+    disponible: true,
+    procesos: [{ label: "Matriz SAP", href: "/generador/resiter" }],
+  },
   { id: "carozzi", nombre: "Carozzi", disponible: false, procesos: [] },
   { id: "habitat", nombre: "Habitat", disponible: false, procesos: [] },
   { id: "enaex", nombre: "Enaex", disponible: false, procesos: [] },
@@ -65,8 +76,18 @@ export const GENERADOR_CLIENTES: GeneradorCliente[] = [
   {
     id: "aza",
     nombre: "AZA",
-    descripcion: "Generador de nóminas AZA — próximamente.",
-    disponible: false,
+    descripcion:
+      "Comparador de nóminas cliente vs plataforma (entrada CSV). Descarga Excel con 6 hojas (Diferencias, Ingresos, Salidas, Actualizaciones, Nuevos y Suspender).",
+    href: "/generador/aza",
+    disponible: true,
+  },
+  {
+    id: "resiter",
+    nombre: "Resiter",
+    descripcion:
+      "Genera CSV Moodle desde matriz Resiter (CSV, Excel o texto pegado). Asigna cursos SAP según perfil operacional, administrativo o CRM.",
+    href: "/generador/resiter",
+    disponible: true,
   },
   {
     id: "carozzi",

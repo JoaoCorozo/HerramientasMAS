@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <head>
+  <script src="js/videojs-ie8.min.js"></script>
+  <link href="css/video-js.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/estilos.css" />
+ <script src="js/video.js"></script>
+
+  </head>
+
+  <body>
+    <video id="scm-video"  controls preload="auto"  class="video-js vjs-default-skin vjs-big-play-centered">
+           <source src="video.mp4" type="video/mp4" res=720 label='720p'>
+  </video>
+
+<script>
+
+
+ var player = videojs("scm-video",{
+  "techOrder": ["html5"],
+        controls: true,
+        autoplay: false,
+        preload: false,
+ }, function(){
+    player.play();
+        this.on('ended', function(){
+            location.href = 'index2.html';
+        });
+		
+    player.on('contextmenu', function(event) {
+        event.preventDefault();
+    });
+      
+});
+  </script>
+  </body>
+</html>
