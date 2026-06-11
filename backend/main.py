@@ -276,20 +276,8 @@ def login(
     db: Session = Depends(get_db),
 ):
     check_login_rate_limit(request)
-    username = (form_data.username or "").strip()
-    user = db.query(models.User).filter(models.User.username == username).first()
-    if not user:
-        user = (
-            db.query(models.User)
-            .filter(models.User.username.ilike(username))
-            .first()
-        )
-    try:
-        password_ok = user and auth.verify_password(form_data.password, user.hashed_password)
-    except Exception:
-        logger.exception("Error verificando contraseña para usuario %s", username)
-        password_ok = False
-    if not password_ok:
+    user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Usuario o contraseña incorrectos")
 
     access_token = auth.create_access_token(data={"sub": user.username})
@@ -1097,8 +1085,12 @@ async def api_generar_carga(
 
 
 from transelec_routes import router as transelec_router
+from aza_routes import router as aza_router
+from resiter_routes import router as resiter_router
 
 app.include_router(transelec_router)
+app.include_router(aza_router)
+app.include_router(resiter_router)
 
 # === GENERADOR DE PAQUETES DE VIDEO ===
 from pathlib import Path as FsPath

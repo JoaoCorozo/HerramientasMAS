@@ -1,11 +1,13 @@
 fastapi
 uvicorn
 openpyxl
+pandas
 xlrd
 pydantic
 sqlalchemy
 pyjwt
-bcrypt>=4.0.0
+passlib[bcrypt]
+bcrypt==3.2.2
 python-multipart
 psycopg2-binary
 cryptography

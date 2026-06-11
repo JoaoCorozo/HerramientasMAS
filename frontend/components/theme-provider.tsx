@@ -82,8 +82,6 @@ function applyTheme(theme: ColorMode) {
   const root = document.documentElement
   root.classList.remove('dark', 'light')
   root.classList.add(theme)
-  // Forzar repintado de variables CSS al cambiar modo
-  root.style.colorScheme = theme
 }
 
 function applyThemePreset(preset: ThemePreset) {

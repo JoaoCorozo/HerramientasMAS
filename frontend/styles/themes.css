@@ -1,7 +1,8 @@
 /* Temas visuales completos: data-theme en <html> + clase .dark / .light */
 
 /* —— Azul (default) —— */
-html:not(.dark)[data-theme="azul"] {
+:root,
+[data-theme="azul"] {
   --background: oklch(0.98 0.008 265);
   --foreground: oklch(0.2 0.02 265);
   --card: oklch(1 0.005 265);
@@ -30,6 +31,7 @@ html:not(.dark)[data-theme="azul"] {
   --app-glow: oklch(0.55 0.2 255 / 0.12);
 }
 
+.dark,
 .dark[data-theme="azul"] {
   --background: oklch(0.15 0.02 265);
   --foreground: oklch(0.97 0.005 265);
@@ -60,7 +62,7 @@ html:not(.dark)[data-theme="azul"] {
 }
 
 /* —— Violeta —— */
-html:not(.dark)[data-theme="violeta"] {
+[data-theme="violeta"] {
   --background: oklch(0.97 0.02 300);
   --foreground: oklch(0.22 0.06 300);
   --card: oklch(0.99 0.01 300);
@@ -118,7 +120,7 @@ html:not(.dark)[data-theme="violeta"] {
 }
 
 /* —— Verde —— */
-html:not(.dark)[data-theme="verde"] {
+[data-theme="verde"] {
   --background: oklch(0.97 0.02 155);
   --foreground: oklch(0.2 0.05 155);
   --card: oklch(0.99 0.01 155);
@@ -176,7 +178,7 @@ html:not(.dark)[data-theme="verde"] {
 }
 
 /* —— Naranja —— */
-html:not(.dark)[data-theme="naranja"] {
+[data-theme="naranja"] {
   --background: oklch(0.98 0.015 55);
   --foreground: oklch(0.22 0.05 45);
   --card: oklch(1 0.01 55);
@@ -234,7 +236,7 @@ html:not(.dark)[data-theme="naranja"] {
 }
 
 /* —— Rosa —— */
-html:not(.dark)[data-theme="rosa"] {
+[data-theme="rosa"] {
   --background: oklch(0.97 0.02 350);
   --foreground: oklch(0.22 0.06 350);
   --card: oklch(0.99 0.01 350);
@@ -292,7 +294,7 @@ html:not(.dark)[data-theme="rosa"] {
 }
 
 /* —— Cyan —— */
-html:not(.dark)[data-theme="cyan"] {
+[data-theme="cyan"] {
   --background: oklch(0.97 0.02 200);
   --foreground: oklch(0.2 0.05 200);
   --card: oklch(0.99 0.01 200);
@@ -350,7 +352,7 @@ html:not(.dark)[data-theme="cyan"] {
 }
 
 /* —— Rojo —— */
-html:not(.dark)[data-theme="rojo"] {
+[data-theme="rojo"] {
   --background: oklch(0.98 0.015 25);
   --foreground: oklch(0.22 0.06 25);
   --card: oklch(1 0.01 25);
@@ -408,7 +410,7 @@ html:not(.dark)[data-theme="rojo"] {
 }
 
 /* —— Ámbar —— */
-html:not(.dark)[data-theme="ambar"] {
+[data-theme="ambar"] {
   --background: oklch(0.98 0.02 80);
   --foreground: oklch(0.22 0.05 70);
   --card: oklch(1 0.015 80);

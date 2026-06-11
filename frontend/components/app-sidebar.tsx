@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   LogOut,
   Users,
+  Package,
   Film,
 } from "lucide-react"
 import { ThemeSettings } from "@/components/theme-settings"
