@@ -31,15 +31,7 @@ export default function LoginPage() {
       })
 
       if (!response.ok) {
-        let detail = "Credenciales incorrectas"
-        try {
-          const err = await response.json()
-          if (err.detail) detail = String(err.detail)
-        } catch {
-          if (response.status === 429) detail = "Demasiados intentos. Espere unos minutos."
-          else if (response.status >= 500) detail = "Error del servidor. ¿Está corriendo el backend en el puerto 8000?"
-        }
-        throw new Error(detail)
+        throw new Error("Credenciales incorrectas")
       }
 
       const meResponse = await apiFetch("/api/auth/me")

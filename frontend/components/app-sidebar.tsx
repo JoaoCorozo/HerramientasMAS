@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   LogOut,
   Users,
+  Package,
   Film,
   FileSpreadsheet,
 } from "lucide-react"

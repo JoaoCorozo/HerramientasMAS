@@ -1,0 +1,4 @@
+25/06/2026	Reunión de Ventas	Analizar indicadores de desempeño mensual	101	Ventas	C:\Empresa\Minuta.pdf
+26/06/2026	Inducción de Seguridad	Curso obligatorio ACHS sobre riesgos laborales	102	Prevención	D:\Mutual\Capacitacion.pdf
+28/06/2026	Revisión de Código	Auditoría de plataforma Next.js local	103	Soporte	C:\Proyectos\WebApp
+30/06/2026	Entrega Semanal	Subir últimos cambios a servidor Render de producción	104	Despliegue	C:\Trabajo\VersionFinal
