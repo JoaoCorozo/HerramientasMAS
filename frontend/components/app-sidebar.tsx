@@ -13,6 +13,7 @@ import {
   LogOut,
   Users,
   Film,
+  FileSpreadsheet,
 } from "lucide-react"
 import { ThemeSettings } from "@/components/theme-settings"
 import { GeneradorNominaMenu } from "@/components/generador-nomina-menu"
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { icon: GraduationCap, label: "Capacitaciones Mod 1", href: "/capacitaciones", moduleName: "capacitaciones" },
   { icon: Link2, label: "Enlaces de Interes", href: "/enlaces", moduleName: "enlaces" },
   { icon: CalendarDays, label: "Calendario & Tareas", href: "/recordatorios", moduleName: "recordatorios" },
+  { icon: FileSpreadsheet, label: "Reporte Consulta Cursos", href: "/consulta-cursos", moduleName: "consulta_cursos" },
 ]
 
 function canAccessModule(

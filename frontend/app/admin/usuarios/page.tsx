@@ -14,6 +14,7 @@ const MODULES = [
   { id: "enlaces", label: "Enlaces" },
   { id: "recordatorios", label: "Recordatorios" },
   { id: "generador", label: "Generador de Cargas" },
+  { id: "consulta_cursos", label: "Reporte Consulta Cursos" },
 ]
 
 export default function UsuariosPage() {

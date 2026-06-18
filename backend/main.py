@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status, Body, Response, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import json
@@ -210,7 +210,7 @@ async def dispatcher_background_loop():
 
 DEFAULT_ADMIN_PERMISSIONS = json.dumps([
     "comparador", "rut", "textos", "capacitaciones",
-    "enlaces", "recordatorios", "generador",
+    "enlaces", "recordatorios", "generador", "consulta_cursos",
 ])
 
 
@@ -458,6 +458,60 @@ def normalizar_textos(data: NombresInput, current_user: models.User = Depends(re
 @app.post("/api/nombres/normalizar")
 def normalizar_nombres(data: NombresInput, current_user: models.User = Depends(require_permission("textos"))):
     return _normalizar_lista_textos(data.nombres, data.formato)
+
+
+# === REPORTE CONSULTA CURSOS (MOODLE) ===
+from consulta_cursos_parser import build_excel_bytes, parse_consulta_text, summarize_rows
+
+
+class ConsultaCursosInput(BaseModel):
+    texto: str
+
+
+@app.post("/api/consulta-cursos/preview")
+def preview_consulta_cursos(
+    data: ConsultaCursosInput,
+    current_user: models.User = Depends(require_permission("consulta_cursos")),
+):
+    texto = (data.texto or "").strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="Pegue el resultado de la consulta Moodle.")
+    rows = parse_consulta_text(texto)
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="No se encontraron registros. Verifique que el texto incluya líneas «Curso: … (ID …)» y filas con RUT.",
+        )
+    summary = summarize_rows(rows)
+    return {
+        **summary,
+        "muestra": [r.as_data_list() for r in rows[:5]],
+    }
+
+
+@app.post("/api/consulta-cursos/excel")
+def export_consulta_cursos_excel(
+    data: ConsultaCursosInput,
+    current_user: models.User = Depends(require_permission("consulta_cursos")),
+):
+    texto = (data.texto or "").strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="Pegue el resultado de la consulta Moodle.")
+    rows = parse_consulta_text(texto)
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="No se encontraron registros para exportar.",
+        )
+    try:
+        content, filename = build_excel_bytes(rows)
+        return StreamingResponse(
+            iter([content]),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=generic_error_detail(e, "reporte consulta cursos"))
 
 
 # === CRUD JSON ===

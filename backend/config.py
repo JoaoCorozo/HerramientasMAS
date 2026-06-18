@@ -40,7 +40,7 @@ MAX_VIDEO_BATCH_BYTES = int(os.getenv("MAX_VIDEO_BATCH_BYTES", str(2 * 1024 * 10
 VALID_ROLES = frozenset({"user", "superadmin"})
 VALID_MODULES = frozenset({
     "comparador", "rut", "textos", "capacitaciones",
-    "enlaces", "recordatorios", "generador",
+    "enlaces", "recordatorios", "generador", "consulta_cursos",
 })
 VALID_DB_MODULES = frozenset({
     "capacitaciones", "enlaces", "recordatorios", "smtp_config",
