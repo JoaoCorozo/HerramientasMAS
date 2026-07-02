@@ -13,6 +13,7 @@ interface ReportStats {
   diferencias: number
   ingresos: number
   salidas: number
+  migraciones_malla?: number
 }
 
 export default function AzaComparadorPage() {
@@ -83,8 +84,10 @@ export default function AzaComparadorPage() {
       window.URL.revokeObjectURL(url)
 
       if (stats) {
+        const mig = stats.migraciones_malla ?? 0
         setSuccessMsg(
-          `Reporte generado: ${stats.diferencias} modificaciones, ${stats.ingresos} nuevos, ${stats.salidas} bajas.`
+          `Reporte generado: ${stats.diferencias} modificaciones, ${stats.ingresos} nuevos, ${stats.salidas} bajas` +
+            (mig > 0 ? `, ${mig} migraciones de malla.` : ".")
         )
       } else {
         setSuccessMsg("Reporte Excel descargado correctamente.")
@@ -118,6 +121,8 @@ export default function AzaComparadorPage() {
             <p className="mt-1 text-sm text-muted-foreground">
               Sube las nóminas en formato CSV (cliente y plataforma). El resultado se descarga como
               Excel con 6 hojas: DIFERENCIAS, INGRESOS, SALIDAS, Actualizaciones, Nuevos y Suspender.
+              Las mallas obsoletas en plataforma (ej. Malla 2 AZA 2024, Malla 8 EcoAza) se migran
+              automáticamente al nuevo número y nombre en Actualizaciones.
             </p>
           </header>
 

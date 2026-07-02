@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import csv
 import io
+import unicodedata
 import warnings
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO
@@ -67,6 +69,129 @@ CAMPOS_EXPORT_NUEVOS = CAMPOS_EXPORT[:-1] + ["auth", "password", "suspended"]
 
 SEPARADORES_CSV = (";", ",")
 MIN_CAMPOS_NOMINA = 15
+
+# Nombres oficiales vigentes (tipousuario = número de malla), según query cliente.
+NOMBRE_MALLA_OFICIAL: dict[str, str] = {
+    "1": "AZA",
+    "2": "AZA Comercial",
+    "3": "Filiales",
+    "4": "Filiales Comercial",
+    "5": "Aza Lideres Operación / Ingenieros / Trainee",
+    "6": "EcoAZA",
+}
+
+# Reglas de migración: (número legacy, alias de nombre, destino número + nombre oficial).
+_REGLAS_MALLAS_LEGACY: list[tuple[str, list[str], tuple[str, str]]] = [
+    ("2", ["AZA 2024"], ("1", NOMBRE_MALLA_OFICIAL["1"])),
+    ("4", ["AZA Comercial 2024"], ("2", NOMBRE_MALLA_OFICIAL["2"])),
+    ("5", ["Filiales"], ("3", NOMBRE_MALLA_OFICIAL["3"])),
+    ("6", ["Filiales Comercial"], ("4", NOMBRE_MALLA_OFICIAL["4"])),
+    (
+        "7",
+        [
+            "Líderes, Ingenieros y Trainees",
+            "Lideres, Ingenieros y Trainees",
+            "AZA Líderes Operación/Ingenieros/Trainee",
+            "AZA Líderes Operación / Ingenieros / Trainee",
+            "AZA Líderes Operación/Ingenieros/Trainees",
+            "Líderes Operación/Ingenieros/Trainee",
+            "Líderes Operación/Ingenieros/Trainees",
+            "Líderes Operación, Ingenieros y Trainees",
+            "Líderes Operación, Ingenieros y Trainee",
+            "Aza Lideres Operación / Ingenieros / Trainee",
+        ],
+        ("5", NOMBRE_MALLA_OFICIAL["5"]),
+    ),
+    ("8", ["EcoAza", "EcoAZA", "ECOAZA"], ("6", NOMBRE_MALLA_OFICIAL["6"])),
+]
+
+
+def normalizar_nombre_malla(nombre) -> str:
+    """Comparación insensible a mayúsculas, tildes, separadores y prefijo AZA."""
+    s = str(nombre or "").strip()
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.casefold()
+    for sep in ("/", ",", ";", "|", "\\", "·", " - ", "-"):
+        s = s.replace(sep, " ")
+    s = " ".join(s.split())
+    if s.startswith("aza "):
+        s = s[4:].strip()
+    return s
+
+
+def _construir_mapeo_mallas_legacy() -> dict[tuple[str, str], tuple[str, str]]:
+    mapeo: dict[tuple[str, str], tuple[str, str]] = {}
+    for numero, alias_list, destino in _REGLAS_MALLAS_LEGACY:
+        for alias in alias_list:
+            mapeo[(numero, normalizar_nombre_malla(alias))] = destino
+    return mapeo
+
+
+MAPEO_MALLAS_LEGACY = _construir_mapeo_mallas_legacy()
+
+# Mallas eliminadas: se marcan para revisión manual (sin destino automático).
+MALLAS_ELIMINADAS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("1", "aza"),
+        ("3", "aza comercial"),
+    }
+)
+
+
+@dataclass(frozen=True)
+class ResolucionMalla:
+    migrar: bool
+    eliminada: bool
+    malla_destino: str
+    nombre_destino: str
+
+
+def clave_malla(numero, nombre) -> tuple[str, str]:
+    return str(numero or "").strip(), normalizar_nombre_malla(nombre)
+
+
+def _es_malla_7_lideres_legacy(nombre_norm: str) -> bool:
+    """Coincidencia flexible para variantes AZA Líderes Operación/Ingenieros/Trainee(s)."""
+    return (
+        "lideres" in nombre_norm
+        and "ingenieros" in nombre_norm
+        and "trainee" in nombre_norm
+    )
+
+
+def resolver_malla_plataforma(malla, nombre) -> ResolucionMalla:
+    """Detecta malla obsoleta en plataforma y devuelve número/nombre vigentes."""
+    key = clave_malla(malla, nombre)
+    if key in MAPEO_MALLAS_LEGACY:
+        nueva_malla, nuevo_nombre = MAPEO_MALLAS_LEGACY[key]
+        return ResolucionMalla(
+            migrar=True,
+            eliminada=False,
+            malla_destino=nueva_malla,
+            nombre_destino=nuevo_nombre,
+        )
+    # Respaldo malla 7: nombre con slashes, prefijo AZA o singular Trainee
+    if key[0] == "7" and _es_malla_7_lideres_legacy(key[1]):
+        return ResolucionMalla(
+            migrar=True,
+            eliminada=False,
+            malla_destino="5",
+            nombre_destino=NOMBRE_MALLA_OFICIAL["5"],
+        )
+    if key in MALLAS_ELIMINADAS:
+        return ResolucionMalla(
+            migrar=False,
+            eliminada=True,
+            malla_destino=str(malla or "").strip(),
+            nombre_destino=str(nombre or "").strip(),
+        )
+    return ResolucionMalla(
+        migrar=False,
+        eliminada=False,
+        malla_destino=str(malla or "").strip(),
+        nombre_destino=str(nombre or "").strip(),
+    )
 
 
 def fila_a_exportacion(row, suspended):
@@ -319,22 +444,52 @@ def valores_diferentes(campo, val_cli, val_plat):
     return val_cli != val_plat
 
 
-def obtener_columnas_con_cambio(row_cli, row_plat):
-    cambio_nombre_malla = valores_diferentes(
-        "Nombre de Malla", row_cli["Nombre de Malla"], row_plat["Nombre de Malla"]
-    )
-    cambio_malla = valores_diferentes("Malla", row_cli["Malla"], row_plat["Malla"])
-    cambio_malla_real = cambio_nombre_malla and cambio_malla
+def construir_fila_destino(row_cli, row_plat, resolucion: ResolucionMalla):
+    """Fila objetivo para exportación: migra malla legacy y conserva el resto del cliente."""
+    row_destino = row_cli.copy()
+    if resolucion.migrar:
+        row_destino["Malla"] = resolucion.malla_destino
+        row_destino["Nombre de Malla"] = resolucion.nombre_destino
+    return row_destino
 
-    columnas_con_cambio = []
+
+def analizar_cambios_fila(row_cli, row_plat):
+    """
+    Analiza una fila de plataforma:
+    - Migra mallas legacy (número + nombre) aunque el cliente ya esté actualizado.
+    - Compara el resto de campos contra la nómina cliente.
+    """
+    resolucion = resolver_malla_plataforma(row_plat["Malla"], row_plat["Nombre de Malla"])
+    row_destino = construir_fila_destino(row_cli, row_plat, resolucion)
+
+    columnas_con_cambio: list[str] = []
+
+    if resolucion.migrar or resolucion.eliminada:
+        columnas_con_cambio.extend(["Malla", "Nombre de Malla"])
+    else:
+        if valores_diferentes("Malla", row_cli["Malla"], row_plat["Malla"]):
+            columnas_con_cambio.append("Malla")
+        if valores_diferentes("Nombre de Malla", row_cli["Nombre de Malla"], row_plat["Nombre de Malla"]):
+            columnas_con_cambio.append("Nombre de Malla")
+
     for campo in CAMPOS:
         if campo in ("Nombre de Malla", "Malla"):
-            if cambio_malla_real:
-                columnas_con_cambio.append(campo)
-        elif valores_diferentes(campo, row_cli[campo], row_plat[campo]):
+            continue
+        if valores_diferentes(campo, row_cli[campo], row_plat[campo]):
             columnas_con_cambio.append(campo)
 
-    return columnas_con_cambio
+    return columnas_con_cambio, row_destino, resolucion
+
+
+def analizar_migracion_solo_plataforma(row_plat):
+    """Migración de malla para usuarios que solo están en plataforma (sin fila cliente)."""
+    resolucion = resolver_malla_plataforma(row_plat["Malla"], row_plat["Nombre de Malla"])
+    if not resolucion.migrar:
+        return None
+    row_destino = row_plat.copy()
+    row_destino["Malla"] = resolucion.malla_destino
+    row_destino["Nombre de Malla"] = resolucion.nombre_destino
+    return row_destino, row_plat
 
 
 def escribir_hoja_exportacion(ws, filas, suspended, font_header, font_body, fill_header, border_thin):
@@ -421,6 +576,7 @@ def procesar_comparacion(ruta_cliente: Path | str, ruta_plataforma: Path | str, 
     df_plat_idx = df_plat.set_index("Rut_Norm")
 
     lista_diferencias = []
+    migraciones_solo_plataforma = []
 
     for rut in comunes_ruts:
         row_cli = df_cli_idx.loc[rut]
@@ -431,10 +587,18 @@ def procesar_comparacion(ruta_cliente: Path | str, ruta_plataforma: Path | str, 
         if isinstance(row_plat, pd.DataFrame):
             row_plat = row_plat.iloc[0]
 
-        columnas_con_cambio = obtener_columnas_con_cambio(row_cli, row_plat)
+        columnas_con_cambio, row_destino, _ = analizar_cambios_fila(row_cli, row_plat)
 
         if columnas_con_cambio:
-            lista_diferencias.append((row_cli, row_plat, columnas_con_cambio))
+            lista_diferencias.append((row_destino, row_plat, columnas_con_cambio))
+
+    for rut in salidas_ruts:
+        row_plat = df_plat_idx.loc[rut]
+        if isinstance(row_plat, pd.DataFrame):
+            row_plat = row_plat.iloc[0]
+        resultado = analizar_migracion_solo_plataforma(row_plat)
+        if resultado:
+            migraciones_solo_plataforma.append(resultado)
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -505,7 +669,8 @@ def procesar_comparacion(ruta_cliente: Path | str, ruta_plataforma: Path | str, 
             cell.font = font_body
             cell.border = border_thin
 
-    pares_actualizaciones = [(row_cli, row_plat) for row_cli, row_plat, _ in lista_diferencias]
+    pares_actualizaciones = [(row_dest, row_plat) for row_dest, row_plat, _ in lista_diferencias]
+    pares_actualizaciones.extend(migraciones_solo_plataforma)
     ws_act = wb.create_sheet(title="Actualizaciones")
     escribir_hoja_actualizaciones(
         ws_act, pares_actualizaciones, font_header, font_body, fill_act_header, border_thin
@@ -535,10 +700,17 @@ def procesar_comparacion(ruta_cliente: Path | str, ruta_plataforma: Path | str, 
     _aplicar_formato_hojas(wb)
     wb.save(destino)
 
+    migraciones_malla = sum(
+        1
+        for _, row_plat, _ in lista_diferencias
+        if resolver_malla_plataforma(row_plat["Malla"], row_plat["Nombre de Malla"]).migrar
+    ) + len(migraciones_solo_plataforma)
+
     return {
         "diferencias": len(lista_diferencias),
         "ingresos": len(df_ingresos),
         "salidas": len(df_salidas),
+        "migraciones_malla": migraciones_malla,
     }
 
 
