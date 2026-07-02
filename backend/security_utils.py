@@ -69,10 +69,10 @@ def safe_planilla_filename(original: str | None) -> str:
     if not dot:
         stem, ext = name, "csv"
     ext = ext.lower()
-    if ext not in ("csv", "xlsx", "xls"):
+    if ext not in ("csv", "xlsx", "xls", "xlsm"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solo se permiten archivos CSV (.csv) o Excel (.xlsx, .xls).",
+            detail="Solo se permiten archivos CSV (.csv) o Excel (.xlsx, .xls, .xlsm).",
         )
     safe_stem = _FILENAME_UNSAFE.sub("_", stem)[:80] or "upload"
     return f"{safe_stem}.{ext}"

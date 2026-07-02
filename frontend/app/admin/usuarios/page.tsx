@@ -15,6 +15,8 @@ const MODULES = [
   { id: "recordatorios", label: "Recordatorios" },
   { id: "generador", label: "Generador de Cargas" },
   { id: "consulta_cursos", label: "Reporte Consulta Cursos" },
+  { id: "usuarios_duplicados", label: "Usuarios Duplicados" },
+  { id: "compresor_video", label: "Compresor MP4" },
 ]
 
 export default function UsuariosPage() {

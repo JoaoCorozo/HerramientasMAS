@@ -41,9 +41,11 @@ VALID_ROLES = frozenset({"user", "superadmin"})
 VALID_MODULES = frozenset({
     "comparador", "rut", "textos", "capacitaciones",
     "enlaces", "recordatorios", "generador", "consulta_cursos",
+    "usuarios_duplicados", "compresor_video",
 })
 VALID_DB_MODULES = frozenset({
     "capacitaciones", "enlaces", "recordatorios", "smtp_config",
+    "usuarios_duplicados",
 })
 
 LOGIN_MAX_ATTEMPTS = int(os.getenv("LOGIN_MAX_ATTEMPTS", "10"))

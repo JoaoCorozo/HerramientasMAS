@@ -15,6 +15,7 @@ import {
   Package,
   Film,
   FileSpreadsheet,
+  Clapperboard,
 } from "lucide-react"
 import { ThemeSettings } from "@/components/theme-settings"
 import { GeneradorNominaMenu } from "@/components/generador-nomina-menu"
@@ -36,6 +37,8 @@ const navItems: NavItem[] = [
   { icon: Link2, label: "Enlaces de Interes", href: "/enlaces", moduleName: "enlaces" },
   { icon: CalendarDays, label: "Calendario & Tareas", href: "/recordatorios", moduleName: "recordatorios" },
   { icon: FileSpreadsheet, label: "Reporte Consulta Cursos", href: "/consulta-cursos", moduleName: "consulta_cursos" },
+  { icon: Users, label: "Usuarios Duplicados", href: "/usuarios-duplicados", moduleName: "usuarios_duplicados" },
+  { icon: Clapperboard, label: "Compresor MP4", href: "/compresor-videos", moduleName: "compresor_video" },
 ]
 
 function canAccessModule(

@@ -22,10 +22,10 @@ export function ThemeSettings() {
         </button>
       </PopoverTrigger>
       <PopoverContent
-        side="top"
-        align="start"
-        sideOffset={8}
-        className="w-80 p-0 overflow-hidden"
+        side="right"
+        align="end"
+        sideOffset={12}
+        className="z-[200] w-80 p-0 overflow-hidden"
       >
         <div className="border-b border-border px-4 py-3">
           <p className="text-sm font-semibold text-foreground">Apariencia</p>

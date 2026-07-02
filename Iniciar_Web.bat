@@ -5,7 +5,10 @@ echo ===================================================
 echo.
 
 echo Iniciando Backend (FastAPI)...
-start "Backend (FastAPI)" cmd /k "cd /d %~dp0backend && set DATABASE_URL=sqlite:///./users.db && set APP_ENV=development && set JWT_SECRET_KEY=dev-local-cambiar-en-produccion && set BOOTSTRAP_ADMIN_PASSWORD=admin123 && set CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000 && py -m uvicorn main:app --reload --port 8000"
+start "Backend (FastAPI)" cmd /k "cd /d %~dp0backend && py -m pip install -q -r requirements.txt && set DATABASE_URL=sqlite:///./users.db && set APP_ENV=development && set JWT_SECRET_KEY=dev-local-cambiar-en-produccion && set BOOTSTRAP_ADMIN_PASSWORD=admin123 && set CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000 && py -m uvicorn main:app --reload --port 8000"
+
+echo Iniciando Compresor de videos (PowerShell)...
+start "Compresor MP4" cmd /k "cd /d %~dp0compresor_video && set COMPRESOR_NO_BROWSER=1 && powershell.exe -NoProfile -ExecutionPolicy Bypass -File server\server.ps1"
 
 echo Iniciando Frontend (Next.js)...
 start "Frontend (Next.js)" cmd /k "cd /d %~dp0frontend && npm run dev"
