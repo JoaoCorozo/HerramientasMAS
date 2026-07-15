@@ -1285,10 +1285,12 @@ async def api_generar_carga(
 from transelec_routes import router as transelec_router
 from aza_routes import router as aza_router
 from resiter_routes import router as resiter_router
+from carozzi_routes import router as carozzi_router
 
 app.include_router(transelec_router)
 app.include_router(aza_router)
 app.include_router(resiter_router)
+app.include_router(carozzi_router)
 
 from compresor_routes import router as compresor_router
 

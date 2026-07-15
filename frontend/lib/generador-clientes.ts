@@ -47,7 +47,12 @@ export const GENERADOR_NAV_CLIENTES: GeneradorNavCliente[] = [
     disponible: true,
     procesos: [{ label: "Matriz SAP", href: "/generador/resiter" }],
   },
-  { id: "carozzi", nombre: "Carozzi", disponible: false, procesos: [] },
+  {
+    id: "carozzi",
+    nombre: "Carozzi",
+    disponible: true,
+    procesos: [{ label: "Comparar DNI / C.I.", href: "/generador/carozzi" }],
+  },
   { id: "habitat", nombre: "Habitat", disponible: false, procesos: [] },
   { id: "enaex", nombre: "Enaex", disponible: false, procesos: [] },
   { id: "bi", nombre: "BI", disponible: false, procesos: [] },
@@ -92,8 +97,10 @@ export const GENERADOR_CLIENTES: GeneradorCliente[] = [
   {
     id: "carozzi",
     nombre: "Carozzi",
-    descripcion: "Generador de nóminas Carozzi — próximamente.",
-    disponible: false,
+    descripcion:
+      "Compara DNI del listado cliente (Excel/CSV) con C.I. de la nómina plataforma (CSV). Normaliza a 8 dígitos y descarga Coincidencias + Faltantes.",
+    href: "/generador/carozzi",
+    disponible: true,
   },
   {
     id: "habitat",
