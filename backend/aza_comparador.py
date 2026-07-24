@@ -130,13 +130,10 @@ def _construir_mapeo_mallas_legacy() -> dict[tuple[str, str], tuple[str, str]]:
 
 MAPEO_MALLAS_LEGACY = _construir_mapeo_mallas_legacy()
 
-# Mallas eliminadas: se marcan para revisión manual (sin destino automático).
-MALLAS_ELIMINADAS: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("1", "aza"),
-        ("3", "aza comercial"),
-    }
-)
+# Mallas eliminadas legacy (sin destino automático). No incluir malla 1 AZA: es la vigente.
+_MALLAS_ELIMINADAS_RAW: list[tuple[str, str]] = [
+    ("3", "AZA Comercial"),
+]
 
 
 @dataclass(frozen=True)
@@ -149,6 +146,11 @@ class ResolucionMalla:
 
 def clave_malla(numero, nombre) -> tuple[str, str]:
     return str(numero or "").strip(), normalizar_nombre_malla(nombre)
+
+
+MALLAS_ELIMINADAS: frozenset[tuple[str, str]] = frozenset(
+    clave_malla(numero, nombre) for numero, nombre in _MALLAS_ELIMINADAS_RAW
+)
 
 
 def _es_malla_7_lideres_legacy(nombre_norm: str) -> bool:
@@ -464,8 +466,13 @@ def analizar_cambios_fila(row_cli, row_plat):
 
     columnas_con_cambio: list[str] = []
 
-    if resolucion.migrar or resolucion.eliminada:
+    if resolucion.migrar:
         columnas_con_cambio.extend(["Malla", "Nombre de Malla"])
+    elif resolucion.eliminada:
+        if valores_diferentes("Malla", row_cli["Malla"], row_plat["Malla"]):
+            columnas_con_cambio.append("Malla")
+        if valores_diferentes("Nombre de Malla", row_cli["Nombre de Malla"], row_plat["Nombre de Malla"]):
+            columnas_con_cambio.append("Nombre de Malla")
     else:
         if valores_diferentes("Malla", row_cli["Malla"], row_plat["Malla"]):
             columnas_con_cambio.append("Malla")
