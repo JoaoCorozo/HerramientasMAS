@@ -31,6 +31,8 @@ export default function UsuariosPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [currentId, setCurrentId] = useState<number | null>(null)
   const [username, setUsername] = useState("")
+  const [nombre, setNombre] = useState("")
+  const [apellido, setApellido] = useState("")
   const [email, setEmail] = useState("")
   const [resetPassword, setResetPassword] = useState(false)
   const [role, setRole] = useState("user")
@@ -122,6 +124,8 @@ export default function UsuariosPage() {
 
     const payload = {
       username,
+      nombre,
+      apellido,
       email,
       role,
       permissions,
@@ -180,6 +184,8 @@ export default function UsuariosPage() {
     setIsEditing(true)
     setCurrentId(u.id)
     setUsername(u.username)
+    setNombre(u.nombre || "")
+    setApellido(u.apellido || "")
     setEmail(u.email || "")
     setResetPassword(false)
     setRole(u.role)
@@ -190,6 +196,8 @@ export default function UsuariosPage() {
     setIsEditing(false)
     setCurrentId(null)
     setUsername("")
+    setNombre("")
+    setApellido("")
     setEmail("")
     setResetPassword(false)
     setRole("user")
@@ -247,6 +255,7 @@ export default function UsuariosPage() {
                         <tr>
                           <th className="px-4 py-3 rounded-l-lg">ID</th>
                           <th className="px-4 py-3">Usuario</th>
+                          <th className="px-4 py-3">Nombre</th>
                           <th className="px-4 py-3">Correo</th>
                           <th className="px-4 py-3">Rol</th>
                           <th className="px-4 py-3">Permisos</th>
@@ -267,6 +276,9 @@ export default function UsuariosPage() {
                                   debe cambiar clave
                                 </span>
                               ) : null}
+                            </td>
+                            <td className="px-4 py-3 text-foreground">
+                              {[u.nombre, u.apellido].filter(Boolean).join(" ") || "—"}
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">{u.email || "—"}</td>
                             <td className="px-4 py-3">
@@ -324,6 +336,32 @@ export default function UsuariosPage() {
                       disabled={isEditing && username === "admin"}
                       className="w-full rounded-md border border-sidebar-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
                     />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">
+                        Nombre <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        required
+                        type="text"
+                        value={nombre}
+                        onChange={(e) => setNombre(e.target.value)}
+                        className="w-full rounded-md border border-sidebar-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-foreground">
+                        Apellido <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        required
+                        type="text"
+                        value={apellido}
+                        onChange={(e) => setApellido(e.target.value)}
+                        className="w-full rounded-md border border-sidebar-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-foreground">

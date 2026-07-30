@@ -10,6 +10,8 @@ export interface User {
   role: string
   permissions: string[]
   email?: string
+  nombre?: string
+  apellido?: string
   must_change_password?: boolean
 }
 

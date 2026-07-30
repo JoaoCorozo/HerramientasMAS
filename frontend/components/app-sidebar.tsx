@@ -68,11 +68,28 @@ export function AppSidebar() {
 
   return (
     <aside className="relative z-[90] flex h-screen w-64 shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-          <LayoutGrid className="h-5 w-5 text-primary" />
+      <div className="border-b border-sidebar-border px-5 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+            <LayoutGrid className="h-5 w-5 text-primary" />
+          </div>
+          <span className="text-base font-semibold text-sidebar-foreground">Herramientas</span>
         </div>
-        <span className="text-base font-semibold text-sidebar-foreground">Herramientas</span>
+        {(user.nombre || "").trim() ? (
+          <p
+            className="mt-3 text-lg font-semibold text-sidebar-foreground truncate"
+            title={`Hola, ${user.nombre}`}
+          >
+            Hola, {user.nombre}
+          </p>
+        ) : (
+          <p
+            className="mt-3 text-lg font-semibold text-sidebar-foreground/80 truncate"
+            title={`Hola, ${user.username}`}
+          >
+            Hola, {user.username}
+          </p>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">

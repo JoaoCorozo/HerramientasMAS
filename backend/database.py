@@ -66,6 +66,16 @@ def ensure_user_schema() -> None:
             alters.append("ALTER TABLE users ADD COLUMN email VARCHAR(255) DEFAULT ''")
         else:
             alters.append("ALTER TABLE users ADD COLUMN email VARCHAR(255) NULL")
+    if "nombre" not in existing:
+        if dialect == "sqlite":
+            alters.append("ALTER TABLE users ADD COLUMN nombre VARCHAR(100) DEFAULT ''")
+        else:
+            alters.append("ALTER TABLE users ADD COLUMN nombre VARCHAR(100) NULL")
+    if "apellido" not in existing:
+        if dialect == "sqlite":
+            alters.append("ALTER TABLE users ADD COLUMN apellido VARCHAR(100) DEFAULT ''")
+        else:
+            alters.append("ALTER TABLE users ADD COLUMN apellido VARCHAR(100) NULL")
     if "must_change_password" not in existing:
         if dialect == "sqlite":
             alters.append(

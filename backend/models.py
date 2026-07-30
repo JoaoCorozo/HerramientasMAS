@@ -13,6 +13,8 @@ class User(Base):
     role = Column(String(20), default="user")
     permissions_json = Column(String(2000), default="[]")
     email = Column(String(255), nullable=True, default="")
+    nombre = Column(String(100), nullable=True, default="")
+    apellido = Column(String(100), nullable=True, default="")
     must_change_password = Column(Boolean, default=False, nullable=False)
 
 

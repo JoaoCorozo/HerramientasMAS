@@ -326,6 +326,28 @@ def _send_welcome_email(
         srv.sendmail(sender_addr, [to_email], msg.as_string())
 
 
+def _normalize_person_name(value: str | None, field: str) -> str:
+    name = (value or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail=f"El {field} es obligatorio")
+    if len(name) > 100:
+        raise HTTPException(status_code=400, detail=f"El {field} es demasiado largo")
+    return name
+
+
+def _user_public_dict(u: models.User) -> dict:
+    return {
+        "id": u.id,
+        "username": u.username,
+        "role": u.role,
+        "permissions": json.loads(u.permissions_json or "[]"),
+        "email": getattr(u, "email", "") or "",
+        "nombre": getattr(u, "nombre", "") or "",
+        "apellido": getattr(u, "apellido", "") or "",
+        "must_change_password": bool(getattr(u, "must_change_password", False)),
+    }
+
+
 def _normalize_email(value: str | None) -> str:
     return (value or "").strip().lower()
 
@@ -350,6 +372,8 @@ def startup_event():
             role="superadmin",
             permissions_json=DEFAULT_ADMIN_PERMISSIONS,
             email="",
+            nombre="",
+            apellido="",
             must_change_password=False,
         )
         db.add(admin_user)
@@ -440,14 +464,7 @@ def logout(response: Response):
 
 @app.get("/api/auth/me")
 def read_users_me(current_user: models.User = Depends(get_current_user)):
-    return {
-        "id": current_user.id,
-        "username": current_user.username,
-        "role": current_user.role,
-        "permissions": json.loads(current_user.permissions_json),
-        "email": getattr(current_user, "email", "") or "",
-        "must_change_password": bool(getattr(current_user, "must_change_password", False)),
-    }
+    return _user_public_dict(current_user)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -480,6 +497,8 @@ class UserCreate(BaseModel):
     role: str
     permissions: list[str]
     email: str | None = None
+    nombre: str | None = None
+    apellido: str | None = None
     reset_password: bool = False
 
 @app.get("/api/users")
@@ -487,17 +506,7 @@ def get_users(current_user: models.User = Depends(get_current_user), db: Session
     if current_user.role != "superadmin":
         raise HTTPException(status_code=403, detail="Not superadmin")
     users = db.query(models.User).all()
-    return [
-        {
-            "id": u.id,
-            "username": u.username,
-            "role": u.role,
-            "permissions": json.loads(u.permissions_json),
-            "email": getattr(u, "email", "") or "",
-            "must_change_password": bool(getattr(u, "must_change_password", False)),
-        }
-        for u in users
-    ]
+    return [_user_public_dict(u) for u in users]
 
 @app.post("/api/users")
 def create_user(user: UserCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -514,6 +523,8 @@ def create_user(user: UserCreate, current_user: models.User = Depends(get_curren
     validate_role(user.role)
     perms = validate_permissions(user.permissions)
     email = _validate_email(user.email)
+    nombre = _normalize_person_name(user.nombre, "nombre")
+    apellido = _normalize_person_name(user.apellido, "apellido")
 
     # Clave provisional generada por el sistema (el admin no la conoce)
     temp_password = auth.generate_temporary_password()
@@ -524,6 +535,8 @@ def create_user(user: UserCreate, current_user: models.User = Depends(get_curren
         role=user.role,
         permissions_json=json.dumps(perms),
         email=email,
+        nombre=nombre,
+        apellido=apellido,
         must_change_password=True,
     )
     db.add(db_user)
@@ -546,10 +559,7 @@ def create_user(user: UserCreate, current_user: models.User = Depends(get_curren
         ) from exc
 
     return {
-        "id": db_user.id,
-        "username": db_user.username,
-        "email": db_user.email,
-        "must_change_password": True,
+        **_user_public_dict(db_user),
         "email_sent": True,
     }
 
@@ -618,6 +628,10 @@ def update_user(user_id: int, user: UserCreate, current_user: models.User = Depe
 
     if user.email is not None and str(user.email).strip():
         db_user.email = _validate_email(user.email)
+    if user.nombre is not None:
+        db_user.nombre = _normalize_person_name(user.nombre, "nombre")
+    if user.apellido is not None:
+        db_user.apellido = _normalize_person_name(user.apellido, "apellido")
 
     db_user.role = user.role
     db_user.permissions_json = json.dumps(perms)
