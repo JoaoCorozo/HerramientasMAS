@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import secrets
 
 import bcrypt
 import jwt
@@ -23,6 +24,20 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def generate_temporary_password(length: int = 12) -> str:
+    """Clave provisional aleatoria (letras + dígitos, sin caracteres ambiguos)."""
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+    # Garantiza al menos una mayúscula, una minúscula y un dígito
+    chars = [
+        secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ"),
+        secrets.choice("abcdefghijkmnopqrstuvwxyz"),
+        secrets.choice("23456789"),
+    ]
+    chars += [secrets.choice(alphabet) for _ in range(max(0, length - 3))]
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
 
 
 def create_access_token(data: dict):

@@ -267,23 +267,40 @@ def _load_platform_smtp(db: Session) -> dict | None:
     return None
 
 
-def _send_welcome_email(db: Session, *, to_email: str, username: str, password: str) -> None:
+def _send_welcome_email(
+    db: Session,
+    *,
+    to_email: str,
+    username: str,
+    password: str,
+    is_reset: bool = False,
+) -> None:
     smtp_cfg = _load_platform_smtp(db)
     if not smtp_cfg:
         raise RuntimeError(
             "SMTP no configurado. Configure el correo en Panel de Administrador → SMTP."
         )
     frontend = config.PUBLIC_FRONTEND_URL or "http://localhost:3000"
-    subject = "Acceso a Plataforma de Herramientas"
+    subject = (
+        "Nueva clave provisional — Plataforma de Herramientas"
+        if is_reset
+        else "Acceso a Plataforma de Herramientas"
+    )
+    intro = (
+        "Se regeneró tu clave provisional de acceso."
+        if is_reset
+        else "Se creó tu cuenta en la Plataforma de Herramientas."
+    )
     html = f"""
     <div style="font-family:Segoe UI,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#18181b;">
       <h2 style="margin:0 0 12px 0;">Bienvenido/a</h2>
-      <p>Se creó tu cuenta en la Plataforma de Herramientas.</p>
+      <p>{intro}</p>
       <p><strong>Usuario:</strong> {escape_html(username)}<br/>
-         <strong>Contraseña temporal:</strong> {escape_html(password)}</p>
+         <strong>Contraseña provisional:</strong> {escape_html(password)}</p>
       <p>Ingresa aquí: <a href="{escape_html(frontend)}">{escape_html(frontend)}</a></p>
       <p style="color:#71717a;font-size:13px;">
-        En el primer inicio de sesión deberás cambiar esta contraseña.
+        Esta clave fue generada automáticamente. En el primer inicio de sesión
+        (o el próximo) deberás cambiarla por una de tu elección.
       </p>
     </div>
     """
@@ -463,6 +480,7 @@ class UserCreate(BaseModel):
     role: str
     permissions: list[str]
     email: str | None = None
+    reset_password: bool = False
 
 @app.get("/api/users")
 def get_users(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -495,12 +513,11 @@ def create_user(user: UserCreate, current_user: models.User = Depends(get_curren
 
     validate_role(user.role)
     perms = validate_permissions(user.permissions)
-    if len(user.password) < 8:
-        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
-
     email = _validate_email(user.email)
 
-    hashed_password = auth.get_password_hash(user.password)
+    # Clave provisional generada por el sistema (el admin no la conoce)
+    temp_password = auth.generate_temporary_password()
+    hashed_password = auth.get_password_hash(temp_password)
     db_user = models.User(
         username=username,
         hashed_password=hashed_password,
@@ -513,22 +530,27 @@ def create_user(user: UserCreate, current_user: models.User = Depends(get_curren
     db.commit()
     db.refresh(db_user)
 
-    email_sent = False
-    email_error = None
     try:
-        _send_welcome_email(db, to_email=email, username=username, password=user.password)
-        email_sent = True
+        _send_welcome_email(db, to_email=email, username=username, password=temp_password)
     except Exception as exc:
-        email_error = str(exc)
         logger.warning("No se pudo enviar correo de bienvenida a %s: %s", email, exc)
+        db.delete(db_user)
+        db.commit()
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "No se pudo enviar el correo con la clave provisional. "
+                "El usuario no fue creado. Revise SMTP e intente de nuevo. "
+                f"Detalle: {exc}"
+            ),
+        ) from exc
 
     return {
         "id": db_user.id,
         "username": db_user.username,
         "email": db_user.email,
         "must_change_password": True,
-        "email_sent": email_sent,
-        "email_error": email_error,
+        "email_sent": True,
     }
 
 @app.put("/api/users/{user_id}")
@@ -583,10 +605,15 @@ def update_user(user_id: int, user: UserCreate, current_user: models.User = Depe
             migrated_modules,
         )
 
-    if user.password:
-        if len(user.password) < 8:
-            raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
-        db_user.hashed_password = auth.get_password_hash(user.password)
+    temp_password = None
+    if user.reset_password:
+        if not (db_user.email or "").strip() and not (user.email and str(user.email).strip()):
+            raise HTTPException(
+                status_code=400,
+                detail="Para regenerar la clave se necesita un correo electrónico del usuario.",
+            )
+        temp_password = auth.generate_temporary_password()
+        db_user.hashed_password = auth.get_password_hash(temp_password)
         db_user.must_change_password = True
 
     if user.email is not None and str(user.email).strip():
@@ -598,13 +625,14 @@ def update_user(user_id: int, user: UserCreate, current_user: models.User = Depe
 
     email_sent = False
     email_error = None
-    if user.password and (db_user.email or "").strip():
+    if temp_password and (db_user.email or "").strip():
         try:
             _send_welcome_email(
                 db,
                 to_email=db_user.email,
                 username=db_user.username,
-                password=user.password,
+                password=temp_password,
+                is_reset=True,
             )
             email_sent = True
         except Exception as exc:
@@ -619,6 +647,7 @@ def update_user(user_id: int, user: UserCreate, current_user: models.User = Depe
         "must_change_password": bool(db_user.must_change_password),
         "email_sent": email_sent,
         "email_error": email_error,
+        "password_reset": bool(temp_password),
     }
 
 @app.delete("/api/users/{user_id}")

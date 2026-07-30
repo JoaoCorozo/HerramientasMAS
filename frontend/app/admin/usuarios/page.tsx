@@ -32,7 +32,7 @@ export default function UsuariosPage() {
   const [currentId, setCurrentId] = useState<number | null>(null)
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [resetPassword, setResetPassword] = useState(false)
   const [role, setRole] = useState("user")
   const [permissions, setPermissions] = useState<string[]>([])
 
@@ -123,9 +123,9 @@ export default function UsuariosPage() {
     const payload = {
       username,
       email,
-      password,
       role,
       permissions,
+      reset_password: isEditing ? resetPassword : false,
     }
 
     const path = isEditing ? `/api/users/${currentId}` : "/api/users"
@@ -145,21 +145,19 @@ export default function UsuariosPage() {
         resetForm()
         fetchUsers()
         if (!isEditing) {
-          if (data.email_sent) {
-            alert("Usuario creado. Se envió el correo con la contraseña temporal.")
-          } else {
-            alert(
-              `Usuario creado, pero no se pudo enviar el correo.\n${data.email_error || "Revise SMTP en este panel."}`
-            )
-          }
-        } else if (password && data.email_sent) {
-          alert("Usuario actualizado. Se reenvió el correo con la nueva contraseña temporal.")
-        } else if (password && data.email_error) {
-          alert(`Usuario actualizado, pero no se pudo enviar el correo.\n${data.email_error}`)
+          alert(
+            "Usuario creado. Se envió por correo una clave provisional generada por el sistema (tú no la conoces)."
+          )
+        } else if (data.password_reset && data.email_sent) {
+          alert("Se regeneró la clave provisional y se envió por correo al usuario.")
+        } else if (data.password_reset && data.email_error) {
+          alert(
+            `Se regeneró la clave, pero no se pudo enviar el correo.\n${data.email_error}`
+          )
         }
       } else {
         const data = await res.json()
-        alert(data.detail || "Error guardando usuario")
+        alert(typeof data.detail === "string" ? data.detail : data.detail || "Error guardando usuario")
       }
     } catch (error) {
       console.error(error)
@@ -183,7 +181,7 @@ export default function UsuariosPage() {
     setCurrentId(u.id)
     setUsername(u.username)
     setEmail(u.email || "")
-    setPassword("")
+    setResetPassword(false)
     setRole(u.role)
     setPermissions(u.permissions)
   }
@@ -193,7 +191,7 @@ export default function UsuariosPage() {
     setCurrentId(null)
     setUsername("")
     setEmail("")
-    setPassword("")
+    setResetPassword(false)
     setRole("user")
     setPermissions([])
   }
@@ -340,26 +338,29 @@ export default function UsuariosPage() {
                       className="w-full rounded-md border border-sidebar-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Al crear (o al resetear clave) se envía la contraseña temporal a este correo.
+                      El sistema genera una clave provisional y la envía a este correo. Tú no la verás.
                     </p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-foreground">
-                      Password{" "}
-                      {isEditing && (
-                        <span className="text-xs text-muted-foreground font-normal">
-                          (Dejar en blanco para mantener)
+                  {isEditing ? (
+                    <label className="flex items-start gap-2 cursor-pointer rounded-md border border-sidebar-border bg-background/50 p-3">
+                      <input
+                        type="checkbox"
+                        checked={resetPassword}
+                        onChange={(e) => setResetPassword(e.target.checked)}
+                        className="mt-0.5 rounded border-sidebar-border bg-background text-primary focus:ring-primary h-4 w-4"
+                      />
+                      <span className="text-sm text-foreground">
+                        Regenerar clave provisional y enviarla por correo
+                        <span className="block text-xs text-muted-foreground mt-0.5">
+                          El usuario deberá cambiarla en el próximo inicio de sesión.
                         </span>
-                      )}
+                      </span>
                     </label>
-                    <input
-                      required={!isEditing}
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full rounded-md border border-sidebar-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                    />
-                  </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground rounded-md border border-sidebar-border bg-background/50 p-3">
+                      No se pide contraseña aquí: se genera sola y llega al correo del usuario.
+                    </p>
+                  )}
                   <div>
                     <label className="block text-sm font-medium mb-1 text-foreground">Rol</label>
                     <select
