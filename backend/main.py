@@ -393,13 +393,51 @@ def update_user(user_id: int, user: UserCreate, current_user: models.User = Depe
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     if user.role == "superadmin" and current_user.username != config.ADMIN_MASTER_USER and db_user.role != "superadmin":
         raise HTTPException(status_code=403, detail="Solo el administrador principal puede asignar rol superadmin")
 
     validate_role(user.role)
     perms = validate_permissions(user.permissions)
-    db_user.username = user.username
+
+    old_username = db_user.username
+    new_username = (user.username or "").strip()
+    if not new_username:
+        raise HTTPException(status_code=400, detail="El nombre de usuario no puede estar vacío")
+    if len(new_username) > 50:
+        raise HTTPException(status_code=400, detail="El nombre de usuario es demasiado largo")
+
+    if old_username == "admin" and new_username != "admin":
+        raise HTTPException(status_code=400, detail="No se puede renombrar el usuario admin")
+
+    migrated_modules = 0
+    if new_username != old_username:
+        conflict = (
+            db.query(models.User)
+            .filter(models.User.username == new_username, models.User.id != user_id)
+            .first()
+        )
+        if conflict:
+            raise HTTPException(status_code=400, detail="Username already registered")
+
+        # Datos huérfanos bajo el nuevo nombre (p. ej. usuario borrado antes): se reemplazan.
+        orphans = db.query(models.AppData).filter(models.AppData.username == new_username).all()
+        for orphan in orphans:
+            db.delete(orphan)
+
+        migrated_modules = (
+            db.query(models.AppData)
+            .filter(models.AppData.username == old_username)
+            .update({models.AppData.username: new_username}, synchronize_session=False)
+        )
+        db_user.username = new_username
+        logger.info(
+            "Usuario renombrado '%s' -> '%s' (%s módulo(s) de app_data migrados).",
+            old_username,
+            new_username,
+            migrated_modules,
+        )
+
     if user.password:
         if len(user.password) < 8:
             raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
@@ -407,7 +445,12 @@ def update_user(user_id: int, user: UserCreate, current_user: models.User = Depe
     db_user.role = user.role
     db_user.permissions_json = json.dumps(perms)
     db.commit()
-    return {"status": "updated"}
+    return {
+        "status": "updated",
+        "username": db_user.username,
+        "renamed": new_username != old_username,
+        "migrated_modules": migrated_modules,
+    }
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
