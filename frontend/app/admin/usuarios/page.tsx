@@ -21,6 +21,7 @@ const MODULES = [
   { id: "consulta_cursos", label: "Reporte Consulta Cursos" },
   { id: "usuarios_duplicados", label: "Usuarios Duplicados" },
   { id: "compresor_video", label: "Compresor MP4" },
+  { id: "evaluaciones_moodle", label: "Evaluaciones Moodle" },
 ]
 
 export default function UsuariosPage() {

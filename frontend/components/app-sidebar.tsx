@@ -15,6 +15,7 @@ import {
   FileSpreadsheet,
   Clapperboard,
   Shield,
+  ClipboardList,
 } from "lucide-react"
 import { ThemeSettings } from "@/components/theme-settings"
 import { GeneradorNominaMenu } from "@/components/generador-nomina-menu"
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { icon: FileSpreadsheet, label: "Reporte Consulta Cursos", href: "/consulta-cursos", moduleName: "consulta_cursos" },
   { icon: Users, label: "Usuarios Duplicados", href: "/usuarios-duplicados", moduleName: "usuarios_duplicados" },
   { icon: Clapperboard, label: "Compresor MP4", href: "/compresor-videos", moduleName: "compresor_video" },
+  { icon: ClipboardList, label: "Evaluaciones Moodle", href: "/evaluaciones-moodle", moduleName: "evaluaciones_moodle" },
 ]
 
 function canAccessModule(

@@ -245,7 +245,7 @@ async def dispatcher_background_loop():
 DEFAULT_ADMIN_PERMISSIONS = json.dumps([
     "comparador", "rut", "textos", "capacitaciones",
     "enlaces", "recordatorios", "generador", "consulta_cursos",
-    "usuarios_duplicados", "compresor_video",
+    "usuarios_duplicados", "compresor_video", "evaluaciones_moodle",
 ])
 
 
