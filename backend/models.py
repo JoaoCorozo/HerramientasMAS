@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -12,6 +12,8 @@ class User(Base):
     hashed_password = Column(String(255))
     role = Column(String(20), default="user")
     permissions_json = Column(String(2000), default="[]")
+    email = Column(String(255), nullable=True, default="")
+    must_change_password = Column(Boolean, default=False, nullable=False)
 
 
 class AppData(Base):

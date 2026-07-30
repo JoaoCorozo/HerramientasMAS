@@ -9,16 +9,21 @@ export interface User {
   username: string
   role: string
   permissions: string[]
+  email?: string
+  must_change_password?: boolean
 }
 
 interface AuthContextType {
   user: User | null
   login: (user: User) => void
   logout: () => void
+  setUserAfterPasswordChange: () => void
   isLoading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+const PUBLIC_PATHS = new Set(["/login"])
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -34,6 +39,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setUser(null)
     router.push("/login")
+  }
+
+  const setUserAfterPasswordChange = () => {
+    setUser((prev) => (prev ? { ...prev, must_change_password: false } : prev))
+    router.push("/")
   }
 
   useEffect(() => {
@@ -52,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .catch(() => {
         setUser(null)
         setIsLoading(false)
-        if (pathname !== "/login") {
+        if (!PUBLIC_PATHS.has(pathname)) {
           router.push("/login")
         }
       })
@@ -65,21 +75,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!isLoading && user && pathname === "/login") {
-      router.push("/")
+    if (isLoading) return
+
+    if (!user) {
+      if (!PUBLIC_PATHS.has(pathname)) {
+        router.push("/login")
+      }
       return
     }
-    if (!isLoading && !user && pathname !== "/login") {
-      router.push("/login")
+
+    if (user.must_change_password) {
+      if (pathname !== "/cambiar-clave") {
+        router.push("/cambiar-clave")
+      }
+      return
+    }
+
+    if (pathname === "/login" || pathname === "/cambiar-clave") {
+      router.push("/")
     }
   }, [isLoading, user, pathname, router])
 
   const login = (newUser: User) => {
     setUser(newUser)
-    router.push("/")
+    if (newUser.must_change_password) {
+      router.push("/cambiar-clave")
+    } else {
+      router.push("/")
+    }
   }
 
-  if (isLoading && pathname !== "/login") {
+  if (isLoading && !PUBLIC_PATHS.has(pathname) && pathname !== "/cambiar-clave") {
     return (
       <div className="flex items-center justify-center h-screen bg-background text-foreground">
         Cargando...
@@ -88,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, setUserAfterPasswordChange, isLoading }}>
       {children}
     </AuthContext.Provider>
   )

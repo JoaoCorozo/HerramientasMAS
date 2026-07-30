@@ -31,6 +31,7 @@ export default function UsuariosPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [currentId, setCurrentId] = useState<number | null>(null)
   const [username, setUsername] = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [role, setRole] = useState("user")
   const [permissions, setPermissions] = useState<string[]>([])
@@ -121,6 +122,7 @@ export default function UsuariosPage() {
 
     const payload = {
       username,
+      email,
       password,
       role,
       permissions,
@@ -139,8 +141,22 @@ export default function UsuariosPage() {
       })
 
       if (res.ok) {
+        const data = await res.json().catch(() => ({}))
         resetForm()
         fetchUsers()
+        if (!isEditing) {
+          if (data.email_sent) {
+            alert("Usuario creado. Se envió el correo con la contraseña temporal.")
+          } else {
+            alert(
+              `Usuario creado, pero no se pudo enviar el correo.\n${data.email_error || "Revise SMTP en este panel."}`
+            )
+          }
+        } else if (password && data.email_sent) {
+          alert("Usuario actualizado. Se reenvió el correo con la nueva contraseña temporal.")
+        } else if (password && data.email_error) {
+          alert(`Usuario actualizado, pero no se pudo enviar el correo.\n${data.email_error}`)
+        }
       } else {
         const data = await res.json()
         alert(data.detail || "Error guardando usuario")
@@ -166,6 +182,7 @@ export default function UsuariosPage() {
     setIsEditing(true)
     setCurrentId(u.id)
     setUsername(u.username)
+    setEmail(u.email || "")
     setPassword("")
     setRole(u.role)
     setPermissions(u.permissions)
@@ -175,6 +192,7 @@ export default function UsuariosPage() {
     setIsEditing(false)
     setCurrentId(null)
     setUsername("")
+    setEmail("")
     setPassword("")
     setRole("user")
     setPermissions([])
@@ -231,6 +249,7 @@ export default function UsuariosPage() {
                         <tr>
                           <th className="px-4 py-3 rounded-l-lg">ID</th>
                           <th className="px-4 py-3">Usuario</th>
+                          <th className="px-4 py-3">Correo</th>
                           <th className="px-4 py-3">Rol</th>
                           <th className="px-4 py-3">Permisos</th>
                           <th className="px-4 py-3 rounded-r-lg">Acciones</th>
@@ -243,7 +262,15 @@ export default function UsuariosPage() {
                             className="border-b border-sidebar-border last:border-0 hover:bg-sidebar-accent/50 transition-colors"
                           >
                             <td className="px-4 py-3 text-foreground font-medium">{u.id}</td>
-                            <td className="px-4 py-3 text-foreground">{u.username}</td>
+                            <td className="px-4 py-3 text-foreground">
+                              {u.username}
+                              {u.must_change_password ? (
+                                <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-500">
+                                  debe cambiar clave
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">{u.email || "—"}</td>
                             <td className="px-4 py-3">
                               <span
                                 className={`px-2 py-1 rounded text-xs font-semibold ${
@@ -299,6 +326,22 @@ export default function UsuariosPage() {
                       disabled={isEditing && username === "admin"}
                       className="w-full rounded-md border border-sidebar-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-foreground">
+                      Correo electrónico {!isEditing && <span className="text-red-400">*</span>}
+                    </label>
+                    <input
+                      required={!isEditing}
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="usuario@empresa.cl"
+                      className="w-full rounded-md border border-sidebar-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Al crear (o al resetear clave) se envía la contraseña temporal a este correo.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-foreground">

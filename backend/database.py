@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from config import SQLALCHEMY_DATABASE_URL
@@ -23,7 +23,6 @@ engine_kwargs: dict = {}
 if SQLALCHEMY_DATABASE_URL_NORMALIZED.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 elif SQLALCHEMY_DATABASE_URL_NORMALIZED.startswith("mysql"):
-    # Evita conexiones muertas tras idle (Docker / proxies)
     engine_kwargs = {
         "pool_pre_ping": True,
         "pool_recycle": 280,
@@ -52,3 +51,36 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def ensure_user_schema() -> None:
+    """Agrega columnas nuevas en `users` sin Alembic (SQLite / MySQL / PostgreSQL)."""
+    insp = inspect(engine)
+    if not insp.has_table("users"):
+        return
+    existing = {col["name"] for col in insp.get_columns("users")}
+    dialect = engine.dialect.name
+    alters: list[str] = []
+    if "email" not in existing:
+        if dialect == "sqlite":
+            alters.append("ALTER TABLE users ADD COLUMN email VARCHAR(255) DEFAULT ''")
+        else:
+            alters.append("ALTER TABLE users ADD COLUMN email VARCHAR(255) NULL")
+    if "must_change_password" not in existing:
+        if dialect == "sqlite":
+            alters.append(
+                "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0 NOT NULL"
+            )
+        elif dialect == "mysql":
+            alters.append(
+                "ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0"
+            )
+        else:
+            alters.append(
+                "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT FALSE"
+            )
+    if not alters:
+        return
+    with engine.begin() as conn:
+        for stmt in alters:
+            conn.execute(text(stmt))

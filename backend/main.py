@@ -19,7 +19,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from database import engine, get_db, Base, SessionLocal
+from database import engine, get_db, Base, SessionLocal, ensure_user_schema
 import models
 import auth
 import config
@@ -38,6 +38,10 @@ from security_utils import (
 )
 
 models.Base.metadata.create_all(bind=engine)
+try:
+    ensure_user_schema()
+except Exception as _schema_exc:
+    logging.getLogger("uvicorn.error").warning("No se pudo migrar schema users: %s", _schema_exc)
 
 app = FastAPI(
     title="Herramientas API",
@@ -245,6 +249,79 @@ DEFAULT_ADMIN_PERMISSIONS = json.dumps([
 ])
 
 
+def _load_platform_smtp(db: Session) -> dict | None:
+    """SMTP del usuario actual o de un superadmin (config del Panel)."""
+    for username in (
+        config.ADMIN_MASTER_USER,
+        *[u.username for u in db.query(models.User).filter(models.User.role == "superadmin").all()],
+    ):
+        rec = _resolve_smtp_record(db, username)
+        if not rec or not rec.payload_json:
+            continue
+        try:
+            cfg = smtp_config_for_mailer(json.loads(rec.payload_json))
+        except Exception:
+            continue
+        if cfg and cfg.get("host") and cfg.get("username") and cfg.get("password"):
+            return cfg
+    return None
+
+
+def _send_welcome_email(db: Session, *, to_email: str, username: str, password: str) -> None:
+    smtp_cfg = _load_platform_smtp(db)
+    if not smtp_cfg:
+        raise RuntimeError(
+            "SMTP no configurado. Configure el correo en Panel de Administrador → SMTP."
+        )
+    frontend = config.PUBLIC_FRONTEND_URL or "http://localhost:3000"
+    subject = "Acceso a Plataforma de Herramientas"
+    html = f"""
+    <div style="font-family:Segoe UI,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#18181b;">
+      <h2 style="margin:0 0 12px 0;">Bienvenido/a</h2>
+      <p>Se creó tu cuenta en la Plataforma de Herramientas.</p>
+      <p><strong>Usuario:</strong> {escape_html(username)}<br/>
+         <strong>Contraseña temporal:</strong> {escape_html(password)}</p>
+      <p>Ingresa aquí: <a href="{escape_html(frontend)}">{escape_html(frontend)}</a></p>
+      <p style="color:#71717a;font-size:13px;">
+        En el primer inicio de sesión deberás cambiar esta contraseña.
+      </p>
+    </div>
+    """
+    msg = MIMEMultipart("alternative")
+    sender_addr = smtp_cfg.get("sender_email") or smtp_cfg.get("username")
+    sender_name = smtp_cfg.get("sender_name") or "Plataforma Herramientas"
+    msg["Subject"] = subject
+    msg["From"] = f"{sender_name} <{sender_addr}>"
+    msg["To"] = to_email
+    msg.attach(MIMEText(html, "html", "utf-8"))
+
+    port = int(smtp_cfg.get("port") or 587)
+    host = smtp_cfg["host"]
+    with smtplib.SMTP(host, port, timeout=30) as srv:
+        srv.ehlo()
+        if port != 465:
+            try:
+                srv.starttls()
+                srv.ehlo()
+            except smtplib.SMTPException:
+                pass
+        srv.login(smtp_cfg["username"], smtp_cfg["password"])
+        srv.sendmail(sender_addr, [to_email], msg.as_string())
+
+
+def _normalize_email(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def _validate_email(value: str) -> str:
+    email = _normalize_email(value)
+    if not email or "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Correo electrónico inválido")
+    if len(email) > 255:
+        raise HTTPException(status_code=400, detail="Correo demasiado largo")
+    return email
+
+
 @app.on_event("startup")
 def startup_event():
     db = next(get_db())
@@ -255,6 +332,8 @@ def startup_event():
             hashed_password=auth.get_password_hash(config.BOOTSTRAP_ADMIN_PASSWORD),
             role="superadmin",
             permissions_json=DEFAULT_ADMIN_PERMISSIONS,
+            email="",
+            must_change_password=False,
         )
         db.add(admin_user)
         db.commit()
@@ -325,7 +404,11 @@ def login(
 
     access_token = auth.create_access_token(data={"sub": user.username})
     set_auth_cookie(response, access_token)
-    return {"token_type": "bearer", "message": "ok"}
+    return {
+        "token_type": "bearer",
+        "message": "ok",
+        "must_change_password": bool(getattr(user, "must_change_password", False)),
+    }
 
 
 @app.post("/api/auth/logout")
@@ -344,27 +427,68 @@ def read_users_me(current_user: models.User = Depends(get_current_user)):
         "id": current_user.id,
         "username": current_user.username,
         "role": current_user.role,
-        "permissions": json.loads(current_user.permissions_json)
+        "permissions": json.loads(current_user.permissions_json),
+        "email": getattr(current_user, "email", "") or "",
+        "must_change_password": bool(getattr(current_user, "must_change_password", False)),
     }
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@app.post("/api/auth/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not auth.verify_password(body.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta")
+    new_password = (body.new_password or "").strip()
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe tener al menos 8 caracteres")
+    if new_password == body.current_password:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe ser distinta a la actual")
+    current_user.hashed_password = auth.get_password_hash(new_password)
+    current_user.must_change_password = False
+    db.commit()
+    return {"status": "ok", "must_change_password": False}
+
 
 class UserCreate(BaseModel):
     username: str
-    password: str
+    password: str = ""
     role: str
     permissions: list[str]
+    email: str | None = None
 
 @app.get("/api/users")
 def get_users(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "superadmin":
         raise HTTPException(status_code=403, detail="Not superadmin")
     users = db.query(models.User).all()
-    return [{"id": u.id, "username": u.username, "role": u.role, "permissions": json.loads(u.permissions_json)} for u in users]
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "role": u.role,
+            "permissions": json.loads(u.permissions_json),
+            "email": getattr(u, "email", "") or "",
+            "must_change_password": bool(getattr(u, "must_change_password", False)),
+        }
+        for u in users
+    ]
 
 @app.post("/api/users")
 def create_user(user: UserCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "superadmin":
         raise HTTPException(status_code=403, detail="Not superadmin")
-    if db.query(models.User).filter(models.User.username == user.username).first():
+    username = (user.username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="El nombre de usuario no puede estar vacío")
+    if db.query(models.User).filter(models.User.username == username).first():
         raise HTTPException(status_code=400, detail="Username already registered")
     if user.role == "superadmin" and current_user.username != config.ADMIN_MASTER_USER:
         raise HTTPException(status_code=403, detail="Solo el administrador principal puede crear superadmins")
@@ -374,17 +498,38 @@ def create_user(user: UserCreate, current_user: models.User = Depends(get_curren
     if len(user.password) < 8:
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
 
+    email = _validate_email(user.email)
+
     hashed_password = auth.get_password_hash(user.password)
     db_user = models.User(
-        username=user.username,
+        username=username,
         hashed_password=hashed_password,
         role=user.role,
-        permissions_json=json.dumps(perms)
+        permissions_json=json.dumps(perms),
+        email=email,
+        must_change_password=True,
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return {"id": db_user.id, "username": db_user.username}
+
+    email_sent = False
+    email_error = None
+    try:
+        _send_welcome_email(db, to_email=email, username=username, password=user.password)
+        email_sent = True
+    except Exception as exc:
+        email_error = str(exc)
+        logger.warning("No se pudo enviar correo de bienvenida a %s: %s", email, exc)
+
+    return {
+        "id": db_user.id,
+        "username": db_user.username,
+        "email": db_user.email,
+        "must_change_password": True,
+        "email_sent": email_sent,
+        "email_error": email_error,
+    }
 
 @app.put("/api/users/{user_id}")
 def update_user(user_id: int, user: UserCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -442,14 +587,38 @@ def update_user(user_id: int, user: UserCreate, current_user: models.User = Depe
         if len(user.password) < 8:
             raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
         db_user.hashed_password = auth.get_password_hash(user.password)
+        db_user.must_change_password = True
+
+    if user.email is not None and str(user.email).strip():
+        db_user.email = _validate_email(user.email)
+
     db_user.role = user.role
     db_user.permissions_json = json.dumps(perms)
     db.commit()
+
+    email_sent = False
+    email_error = None
+    if user.password and (db_user.email or "").strip():
+        try:
+            _send_welcome_email(
+                db,
+                to_email=db_user.email,
+                username=db_user.username,
+                password=user.password,
+            )
+            email_sent = True
+        except Exception as exc:
+            email_error = str(exc)
+            logger.warning("No se pudo reenviar correo a %s: %s", db_user.email, exc)
+
     return {
         "status": "updated",
         "username": db_user.username,
         "renamed": new_username != old_username,
         "migrated_modules": migrated_modules,
+        "must_change_password": bool(db_user.must_change_password),
+        "email_sent": email_sent,
+        "email_error": email_error,
     }
 
 @app.delete("/api/users/{user_id}")
