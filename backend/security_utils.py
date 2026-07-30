@@ -13,7 +13,6 @@ from config import (
     MAX_VIDEO_UPLOAD_BYTES,
     VALID_MODULES,
 )
-
 _FILENAME_UNSAFE = re.compile(r"[^a-zA-Z0-9._-]+")
 
 
@@ -138,7 +137,14 @@ async def stream_video_upload_to_file(
     *,
     max_bytes: int | None = None,
 ) -> int:
-    limit = max_bytes if max_bytes is not None else MAX_VIDEO_UPLOAD_BYTES
+    """Guarda un video en disco. max_bytes=None usa MAX_VIDEO_UPLOAD_BYTES; 0 = sin límite."""
+    if max_bytes == 0:
+        limit: int | None = None
+    elif max_bytes is None:
+        limit = MAX_VIDEO_UPLOAD_BYTES
+    else:
+        limit = max_bytes
+
     dest.parent.mkdir(parents=True, exist_ok=True)
     total = 0
     with dest.open("wb") as handle:
@@ -147,7 +153,8 @@ async def stream_video_upload_to_file(
             if not chunk:
                 break
             total += len(chunk)
-            if total > limit:
+            if limit is not None and total > limit:
+                dest.unlink(missing_ok=True)
                 raise HTTPException(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     detail=f"El video supera el límite de {limit // (1024 * 1024)} MB.",

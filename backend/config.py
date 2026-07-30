@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import quote_plus
 
 try:
     from dotenv import load_dotenv
@@ -12,7 +13,25 @@ except ImportError:
 APP_ENV = os.getenv("APP_ENV", "development")
 IS_PRODUCTION = APP_ENV == "production"
 
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./users.db")
+
+def _build_database_url() -> str:
+    explicit = os.getenv("DATABASE_URL")
+    if explicit:
+        return explicit
+    mysql_host = os.getenv("MYSQL_HOST")
+    if mysql_host:
+        user = quote_plus(os.getenv("MYSQL_USER", "herramientas"))
+        password = quote_plus(os.getenv("MYSQL_PASSWORD", ""))
+        database = os.getenv("MYSQL_DATABASE", "herramientas")
+        port = os.getenv("MYSQL_PORT", "3306")
+        return (
+            f"mysql+pymysql://{user}:{password}@{mysql_host}:{port}/{database}"
+            f"?charset=utf8mb4"
+        )
+    return "sqlite:///./users.db"
+
+
+SQLALCHEMY_DATABASE_URL = _build_database_url()
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
@@ -36,6 +55,8 @@ if PUBLIC_FRONTEND_URL and PUBLIC_FRONTEND_URL not in CORS_ORIGINS:
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(20 * 1024 * 1024)))
 MAX_VIDEO_UPLOAD_BYTES = int(os.getenv("MAX_VIDEO_UPLOAD_BYTES", str(500 * 1024 * 1024)))
 MAX_VIDEO_BATCH_BYTES = int(os.getenv("MAX_VIDEO_BATCH_BYTES", str(2 * 1024 * 1024 * 1024)))
+# Compresor MP4: 0 = sin límite por archivo (solo limitado por disco local)
+COMPRESOR_VIDEO_MAX_BYTES = int(os.getenv("COMPRESOR_VIDEO_MAX_BYTES", "0"))
 
 VALID_ROLES = frozenset({"user", "superadmin"})
 VALID_MODULES = frozenset({
@@ -59,4 +80,4 @@ CROSS_SITE_AUTH = os.getenv("CROSS_SITE_AUTH", "").lower() in ("1", "true", "yes
 COOKIE_SAMESITE = "none" if (IS_PRODUCTION and CROSS_SITE_AUTH) else "lax"
 COOKIE_SECURE = IS_PRODUCTION or CROSS_SITE_AUTH
 
-APP_ENCRYPTION_KEY = os.getenv("APP_ENCRYPTION_KEY", JWT_SECRET_KEY)
+APP_ENCRYPTION_KEY = os.getenv("APP_ENCRYPTION_KEY") or JWT_SECRET_KEY

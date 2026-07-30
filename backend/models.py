@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -20,7 +20,8 @@ class AppData(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), index=True)
     module_name = Column(String(50), index=True)
-    payload_json = Column(String)
+    # Text: payloads JSON grandes (compatible SQLite / PostgreSQL / MySQL)
+    payload_json = Column(Text)
 
 
 class MoodleCourse(Base):

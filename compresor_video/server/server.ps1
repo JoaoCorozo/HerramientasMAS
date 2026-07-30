@@ -461,6 +461,13 @@ function Refresh-Items {
                 $item.FfmpegPid = 0
             }
         }
+
+        # Tras finalizar, liberar el MP4 original en input para no reaparecer al escanear.
+        if ($item.Status -eq "done" -and $item.Source -eq "input" -and $item.Path) {
+            if (Test-Path -LiteralPath $item.Path -PathType Leaf) {
+                Remove-Item -LiteralPath $item.Path -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
     Start-Queue
 }
@@ -651,6 +658,44 @@ function Scan-InputFolder {
     return $files.Count
 }
 
+function Clear-InputAndQueue {
+    $removedFiles = 0
+    $removedItems = 0
+
+    foreach ($id in @($script:Items.Keys)) {
+        $item = $script:Items[$id]
+        if ($item.Status -in @("running", "queued")) { continue }
+        if ($item.Path -and (Test-Path -LiteralPath $item.Path -PathType Leaf)) {
+            try {
+                Remove-Item -LiteralPath $item.Path -Force -ErrorAction Stop
+                $removedFiles++
+            } catch {
+                Add-AppLog ("No se pudo borrar archivo de cola: {0}" -f $item.Path)
+            }
+        }
+        $script:Items.Remove($id)
+        $removedItems++
+    }
+
+    if (Test-Path -LiteralPath $InputDir) {
+        foreach ($file in @(Get-ChildItem -LiteralPath $InputDir -Filter "*.mp4" -File -ErrorAction SilentlyContinue)) {
+            $stillReferenced = @($script:Items.Values | Where-Object { $_.Path -eq $file.FullName }).Count -gt 0
+            if ($stillReferenced) { continue }
+            try {
+                Remove-Item -LiteralPath $file.FullName -Force -ErrorAction Stop
+                $removedFiles++
+            } catch {
+                Add-AppLog ("No se pudo borrar residual input: {0}" -f $file.FullName)
+            }
+        }
+    }
+
+    $script:QueueStartedAt = $null
+    $script:QueueFinishedAt = $null
+    Add-AppLog ("Limpieza: {0} items, {1} archivos." -f $removedItems, $removedFiles)
+    return [ordered]@{ removedItems = $removedItems; removedFiles = $removedFiles }
+}
+
 function Stop-Queue {
     $script:CancelRequested = $true
     Add-AppLog "Cancelacion del video actual solicitada por STOP."
@@ -779,6 +824,21 @@ function Handle-Api {
                 Write-JsonResponse $Context $response
                 return
             }
+            "/api/clear-input" {
+                if ($method -ne "POST") { Write-JsonResponse $Context @{ ok = $false; error = "Metodo no permitido." } 405; return }
+                # Si hay proceso activo, detenerlo y luego limpiar.
+                if (@($script:Items.Values | Where-Object { $_.Status -in @("running", "queued") }).Count -gt 0) {
+                    Stop-Queue
+                    Start-Sleep -Milliseconds 400
+                }
+                $cleared = Clear-InputAndQueue
+                $response = Get-ItemsResponse
+                $response["removedItems"] = $cleared.removedItems
+                $response["removedFiles"] = $cleared.removedFiles
+                $response["message"] = "Cola y carpeta input limpiadas."
+                Write-JsonResponse $Context $response
+                return
+            }
             "/api/add-videos" {
                 if ($method -ne "POST") { Write-JsonResponse $Context @{ ok = $false; error = "Metodo no permitido." } 405; return }
                 if (@($script:Items.Values | Where-Object { $_.Status -in @("running", "queued") }).Count -gt 0) {
@@ -896,6 +956,9 @@ function Handle-Api {
                     if ($item.Status -eq "running") {
                         Write-JsonResponse $Context @{ ok = $false; error = "No se puede quitar un video en proceso." } 400
                         return
+                    }
+                    if ($item.Path -and (Test-Path -LiteralPath $item.Path -PathType Leaf)) {
+                        Remove-Item -LiteralPath $item.Path -Force -ErrorAction SilentlyContinue
                     }
                     $script:Items.Remove($id)
                 }

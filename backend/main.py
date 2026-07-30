@@ -27,10 +27,7 @@ from deps import get_current_user, require_permission, check_login_rate_limit
 from security_utils import (
     safe_upload_filename,
     safe_planilla_filename,
-    safe_video_filename,
     read_upload_limited,
-    read_video_upload_limited,
-    stream_video_upload_to_file,
     escape_html,
     protect_smtp_config,
     expose_smtp_config,
@@ -58,153 +55,185 @@ app.add_middleware(
 
 logger = logging.getLogger("recordatorios_mailer")
 
+def _task_due_for_notification(date_str: str, task: dict, now: datetime) -> bool:
+    """Decide si una tarea ya debe notificarse por SMTP."""
+    current_date_str = now.strftime("%Y-%m-%d")
+    if date_str > current_date_str:
+        return False
+    hora = (task.get("hora") or "").strip()
+    if not hora:
+        # Todo el día: digest a partir de las 9:00
+        return now.hour >= 9
+    try:
+        hour_s, minute_s = hora.split(":", 1)
+        due_minutes = int(hour_s) * 60 + int(minute_s)
+    except (ValueError, TypeError):
+        return now.hour >= 9
+    if date_str < current_date_str:
+        return True
+    now_minutes = now.hour * 60 + now.minute
+    return now_minutes >= due_minutes
+
+
+def _resolve_smtp_record(db, username: str):
+    """SMTP del usuario; si no hay, usa el de un superadmin (config central)."""
+    smtp_rec = db.query(models.AppData).filter(
+        models.AppData.username == username,
+        models.AppData.module_name == "smtp_config",
+    ).first()
+    if smtp_rec and smtp_rec.payload_json:
+        return smtp_rec
+    admins = db.query(models.User).filter(models.User.role == "superadmin").all()
+    for admin in admins:
+        smtp_rec = db.query(models.AppData).filter(
+            models.AppData.username == admin.username,
+            models.AppData.module_name == "smtp_config",
+        ).first()
+        if smtp_rec and smtp_rec.payload_json:
+            return smtp_rec
+    return None
+
+
 async def dispatcher_background_loop():
     logger.info("Recordatorios mailer background worker started.")
     while True:
         try:
-            # Despierta cada 60 segundos
             await asyncio.sleep(60)
-            
+
             db = SessionLocal()
             now = datetime.now()
-            
-            # Ejecutar despachos si ya son las 9:00 AM o más
-            current_date_str = now.strftime("%Y-%m-%d")
-            if now.hour >= 9:
-                records = db.query(models.AppData).filter(models.AppData.module_name == "recordatorios").all()
-                for rec in records:
-                    if not rec.payload_json: continue
-                    try:
-                        tasks_db = json.loads(rec.payload_json)
-                    except:
-                        continue
-                        
-                    # Agrupar tareas pendientes por correo de notificación
-                    grouped_tasks = {}
-                    for date_str, task_list in list(tasks_db.items()):
-                        if date_str <= current_date_str:
-                            for idx, task in enumerate(task_list):
-                                if not task.get("completada", False) and task.get("correo_notificacion") and not task.get("notificado", False):
-                                    email = task.get("correo_notificacion").strip().lower()
-                                    if email:
-                                        if email not in grouped_tasks:
-                                            grouped_tasks[email] = []
-                                        grouped_tasks[email].append((date_str, idx, task))
-                    
-                    if not grouped_tasks:
-                        continue
-                        
-                    # Cargar SMTP config de este usuario
-                    smtp_rec = db.query(models.AppData).filter(
-                        models.AppData.username == rec.username,
-                        models.AppData.module_name == "smtp_config"
-                    ).first()
-                    
-                    if not smtp_rec or not smtp_rec.payload_json:
-                        continue
-                        
-                    try:
-                        smtp_cfg = smtp_config_for_mailer(json.loads(smtp_rec.payload_json))
-                    except:
-                        continue
-                        
-                    if not smtp_cfg or not smtp_cfg.get("host") or not smtp_cfg.get("username") or not smtp_cfg.get("password"):
-                        continue
-                        
-                    dirty = False
-                    # Procesar cada destinatario y enviarle su resumen
-                    for email, tasks_to_send in grouped_tasks.items():
-                        try:
-                            tasks_html = ""
-                            for date_str, idx, t in tasks_to_send:
-                                tasks_html += f"""
-                                <div style="margin-bottom: 20px; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px; background-color: #fafafa; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                                    <div style="margin-bottom: 12px; border-bottom: 1px solid #f4f4f5; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                                        <span style="font-size: 16px; font-weight: bold; color: #8b5cf6;">📌 {escape_html(t.get('titulo', 'Tarea'))}</span>
-                                        <span style="font-size: 12px; color: #a1a1aa; background-color: #f4f4f5; padding: 4px 8px; border-radius: 4px; font-weight: bold;">📅 {escape_html(date_str)}</span>
-                                    </div>
-                                    <p style="margin: 0 0 12px 0; font-size: 14px; color: #3f3f46; line-height: 1.5;">{escape_html(t.get('cuerpo_mail') or t.get('detalle', 'Sin detalles adicionales.'))}</p>
-                                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                                """
-                                if t.get("curso"):
-                                    tasks_html += f"""
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: bold; color: #71717a; width: 100px;">📚 Curso ID:</td>
-                                            <td style="padding: 4px 0; color: #18181b;">{escape_html(t.get('curso'))}</td>
-                                        </tr>
-                                    """
-                                if t.get("grupo"):
-                                    tasks_html += f"""
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: bold; color: #71717a;">👥 Grupo:</td>
-                                            <td style="padding: 4px 0; color: #18181b;">{escape_html(t.get('grupo'))}</td>
-                                        </tr>
-                                    """
-                                if t.get("asunto"):
-                                    tasks_html += f"""
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: bold; color: #71717a;">📝 Asunto:</td>
-                                            <td style="padding: 4px 0; color: #18181b;">{escape_html(t.get('asunto'))}</td>
-                                        </tr>
-                                    """
-                                tasks_html += """
-                                    </table>
-                                </div>
-                                """
 
-                            html_content = f"""
-                            <html>
-                            <body style="font-family: Arial, sans-serif; background-color: #f4f4f5; padding: 20px; margin: 0;">
-                                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e4e4e7; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                                    <div style="background-color: #8b5cf6; padding: 24px; color: #ffffff; text-align: center;">
-                                        <h2 style="margin: 0; font-size: 24px; font-weight: bold; letter-spacing: -0.5px;">🔔 Resumen de Tareas Pendientes</h2>
-                                        <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 14px;">Plataforma de Herramientas BEX</p>
-                                    </div>
-                                    <div style="padding: 24px; color: #18181b;">
-                                        <p style="font-size: 15px; color: #3f3f46; margin-top: 0; margin-bottom: 20px;">Tienes las siguientes tareas programadas para hoy:</p>
-                                        
-                                        {tasks_html}
-                                        
-                                        <hr style="border: 0; border-top: 1px solid #e4e4e7; margin: 24px 0;">
-                                        <p style="font-size: 12px; color: #a1a1aa; text-align: center; margin-bottom: 0; line-height: 1.5;">
-                                            Este es un recordatorio automático consolidado enviado a las 9:00 AM.<br>
-                                            Por favor, no respondas a este correo.
-                                        </p>
-                                    </div>
+            records = db.query(models.AppData).filter(models.AppData.module_name == "recordatorios").all()
+            for rec in records:
+                if not rec.payload_json:
+                    continue
+                try:
+                    tasks_db = json.loads(rec.payload_json)
+                except Exception:
+                    continue
+
+                grouped_tasks = {}
+                for date_str, task_list in list(tasks_db.items()):
+                    for idx, task in enumerate(task_list):
+                        if task.get("completada", False):
+                            continue
+                        if not task.get("correo_notificacion") or task.get("notificado", False):
+                            continue
+                        if not _task_due_for_notification(date_str, task, now):
+                            continue
+                        email = task.get("correo_notificacion").strip().lower()
+                        if not email:
+                            continue
+                        grouped_tasks.setdefault(email, []).append((date_str, idx, task))
+
+                if not grouped_tasks:
+                    continue
+
+                smtp_rec = _resolve_smtp_record(db, rec.username)
+
+                if not smtp_rec or not smtp_rec.payload_json:
+                    continue
+
+                try:
+                    smtp_cfg = smtp_config_for_mailer(json.loads(smtp_rec.payload_json))
+                except Exception:
+                    continue
+
+                if not smtp_cfg or not smtp_cfg.get("host") or not smtp_cfg.get("username") or not smtp_cfg.get("password"):
+                    continue
+
+                dirty = False
+                for email, tasks_to_send in grouped_tasks.items():
+                    try:
+                        tasks_html = ""
+                        for date_str, idx, t in tasks_to_send:
+                            hora_label = (t.get("hora") or "").strip()
+                            when_label = f"{escape_html(date_str)}" + (f" {escape_html(hora_label)}" if hora_label else "")
+                            body_text = t.get("detalle") or t.get("cuerpo_mail") or "Sin detalles adicionales."
+                            tasks_html += f"""
+                            <div style="margin-bottom: 20px; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px; background-color: #fafafa; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                <div style="margin-bottom: 12px; border-bottom: 1px solid #f4f4f5; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 16px; font-weight: bold; color: #8b5cf6;">📌 {escape_html(t.get('titulo', 'Tarea'))}</span>
+                                    <span style="font-size: 12px; color: #a1a1aa; background-color: #f4f4f5; padding: 4px 8px; border-radius: 4px; font-weight: bold;">📅 {when_label}</span>
                                 </div>
-                            </body>
-                            </html>
+                                <p style="margin: 0 0 12px 0; font-size: 14px; color: #3f3f46; line-height: 1.5;">{escape_html(body_text)}</p>
+                                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                             """
-                            
-                            msg = MIMEMultipart('alternative')
-                            msg['Subject'] = f"🔔 Resumen de Tareas Pendientes ({len(tasks_to_send)} Tareas)"
-                            sender_name = smtp_cfg.get("sender_name") or "Plataforma Herramientas"
-                            sender_addr = smtp_cfg.get("sender_email") or smtp_cfg.get("username")
-                            msg['From'] = f"{sender_name} <{sender_addr}>"
-                            msg['To'] = email
-                            
-                            msg.attach(MIMEText(html_content, 'html'))
-                            
-                            # Conexión SMTP
-                            srv = smtplib.SMTP(smtp_cfg["host"], int(smtp_cfg["port"]))
-                            if smtp_cfg.get("use_tls", True) or int(smtp_cfg.get("port", 587)) == 587:
-                                srv.starttls()
-                            srv.login(smtp_cfg["username"], smtp_cfg["password"])
-                            srv.sendmail(sender_addr, email, msg.as_string())
-                            srv.quit()
-                            
-                            # Marcar como notificado
-                            for date_str, idx, task in tasks_to_send:
-                                tasks_db[date_str][idx]["notificado"] = True
-                            dirty = True
-                            logger.info(f"Consolidated notification email sent to {email} with {len(tasks_to_send)} tasks.")
-                        except Exception as send_err:
-                            logger.error(f"Error sending consolidated email to {email}: {send_err}")
-                            
-                    if dirty:
-                        rec.payload_json = json.dumps(tasks_db)
-                        db.commit()
-                        
+                            if t.get("curso"):
+                                tasks_html += f"""
+                                    <tr>
+                                        <td style="padding: 4px 0; font-weight: bold; color: #71717a; width: 100px;">📚 Curso ID:</td>
+                                        <td style="padding: 4px 0; color: #18181b;">{escape_html(t.get('curso'))}</td>
+                                    </tr>
+                                """
+                            if t.get("grupo"):
+                                tasks_html += f"""
+                                    <tr>
+                                        <td style="padding: 4px 0; font-weight: bold; color: #71717a;">👥 Grupo:</td>
+                                        <td style="padding: 4px 0; color: #18181b;">{escape_html(t.get('grupo'))}</td>
+                                    </tr>
+                                """
+                            if t.get("asunto"):
+                                tasks_html += f"""
+                                    <tr>
+                                        <td style="padding: 4px 0; font-weight: bold; color: #71717a;">📝 Asunto:</td>
+                                        <td style="padding: 4px 0; color: #18181b;">{escape_html(t.get('asunto'))}</td>
+                                    </tr>
+                                """
+                            tasks_html += """
+                                </table>
+                            </div>
+                            """
+
+                        html_content = f"""
+                        <html>
+                        <body style="font-family: Arial, sans-serif; background-color: #f4f4f5; padding: 20px; margin: 0;">
+                            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e4e4e7; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                                <div style="background-color: #8b5cf6; padding: 24px; color: #ffffff; text-align: center;">
+                                    <h2 style="margin: 0; font-size: 24px; font-weight: bold; letter-spacing: -0.5px;">🔔 Resumen de Tareas Pendientes</h2>
+                                    <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 14px;">Plataforma de Herramientas BEX</p>
+                                </div>
+                                <div style="padding: 24px; color: #18181b;">
+                                    <p style="font-size: 15px; color: #3f3f46; margin-top: 0; margin-bottom: 20px;">Tienes las siguientes tareas pendientes:</p>
+                                    {tasks_html}
+                                    <hr style="border: 0; border-top: 1px solid #e4e4e7; margin: 24px 0;">
+                                    <p style="font-size: 12px; color: #a1a1aa; text-align: center; margin-bottom: 0; line-height: 1.5;">
+                                        Recordatorio automático de la Plataforma de Herramientas.<br>
+                                        Por favor, no respondas a este correo.
+                                    </p>
+                                </div>
+                            </div>
+                        </body>
+                        </html>
+                        """
+
+                        msg = MIMEMultipart("alternative")
+                        msg["Subject"] = f"🔔 Resumen de Tareas Pendientes ({len(tasks_to_send)} Tareas)"
+                        sender_name = smtp_cfg.get("sender_name") or "Plataforma Herramientas"
+                        sender_addr = smtp_cfg.get("sender_email") or smtp_cfg.get("username")
+                        msg["From"] = f"{sender_name} <{sender_addr}>"
+                        msg["To"] = email
+
+                        msg.attach(MIMEText(html_content, "html"))
+
+                        srv = smtplib.SMTP(smtp_cfg["host"], int(smtp_cfg["port"]))
+                        if smtp_cfg.get("use_tls", True) or int(smtp_cfg.get("port", 587)) == 587:
+                            srv.starttls()
+                        srv.login(smtp_cfg["username"], smtp_cfg["password"])
+                        srv.sendmail(sender_addr, email, msg.as_string())
+                        srv.quit()
+
+                        for date_str, idx, task in tasks_to_send:
+                            tasks_db[date_str][idx]["notificado"] = True
+                        dirty = True
+                        logger.info(f"Consolidated notification email sent to {email} with {len(tasks_to_send)} tasks.")
+                    except Exception as send_err:
+                        logger.error(f"Error sending consolidated email to {email}: {send_err}")
+
+                if dirty:
+                    rec.payload_json = json.dumps(tasks_db)
+                    db.commit()
+
             db.close()
         except Exception as loop_err:
             logger.error(f"Error in dispatcher background loop: {loop_err}")
@@ -695,9 +724,12 @@ def save_db(db_name: str, username: str, data, db_session: Session):
 
 @app.get("/api/db/{db_name}")
 def read_db(db_name: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user.role != "superadmin":
+    if db_name == "smtp_config":
+        if current_user.role != "superadmin":
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+    elif current_user.role != "superadmin":
         user_permissions = json.loads(current_user.permissions_json)
-        if db_name not in user_permissions and not (db_name == "smtp_config" and "recordatorios" in user_permissions):
+        if db_name not in user_permissions:
             raise HTTPException(status_code=403, detail="Not enough permissions")
     if db_name not in config.VALID_DB_MODULES:
         raise HTTPException(status_code=404, detail="DB not found")
@@ -705,9 +737,12 @@ def read_db(db_name: str, current_user: models.User = Depends(get_current_user),
 
 @app.post("/api/db/{db_name}")
 def write_db(db_name: str, data: dict | list = Body(...), current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user.role != "superadmin":
+    if db_name == "smtp_config":
+        if current_user.role != "superadmin":
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+    elif current_user.role != "superadmin":
         user_permissions = json.loads(current_user.permissions_json)
-        if db_name not in user_permissions and not (db_name == "smtp_config" and "recordatorios" in user_permissions):
+        if db_name not in user_permissions:
             raise HTTPException(status_code=403, detail="Not enough permissions")
     if db_name not in config.VALID_DB_MODULES:
         raise HTTPException(status_code=404, detail="DB not found")
@@ -1295,80 +1330,4 @@ app.include_router(carozzi_router)
 from compresor_routes import router as compresor_router
 
 app.include_router(compresor_router)
-
-# === GENERADOR DE PAQUETES DE VIDEO ===
-from pathlib import Path as FsPath
-from video_packages import (
-    crear_zip_lote,
-    generar_paquetes_video,
-    validar_nombre_carpeta,
-    validar_url_curso,
-)
-
-
-@app.post("/api/generador/videos/generar")
-async def api_generar_paquetes_video(
-    background_tasks: BackgroundTasks,
-    nombre_lote: str = Form(...),
-    course_url: str = Form(...),
-    videos: list[UploadFile] = File(...),
-    current_user: models.User = Depends(require_permission("generador")),
-):
-    error = validar_nombre_carpeta(nombre_lote)
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-
-    error = validar_url_curso(course_url)
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-
-    if not videos:
-        raise HTTPException(status_code=400, detail="Agrega al menos un video.")
-
-    temp_dir = tempfile.mkdtemp()
-    saved_paths: list[FsPath] = []
-    total_bytes = 0
-
-    try:
-        for upload in videos:
-            safe_name = safe_video_filename(upload.filename)
-            dest = FsPath(temp_dir) / f"{len(saved_paths)}_{safe_name}"
-            file_size = await stream_video_upload_to_file(upload, dest)
-            total_bytes += file_size
-            if total_bytes > config.MAX_VIDEO_BATCH_BYTES:
-                raise HTTPException(
-                    status_code=413,
-                    detail=(
-                        f"El total de videos supera el límite de "
-                        f"{config.MAX_VIDEO_BATCH_BYTES // (1024 * 1024)} MB."
-                    ),
-                )
-            saved_paths.append(dest)
-
-        lote_dir = generar_paquetes_video(
-            FsPath(temp_dir),
-            nombre_lote.strip(),
-            course_url.strip(),
-            saved_paths,
-        )
-
-        zip_name = f"{nombre_lote.strip()}.zip"
-        zip_path = FsPath(temp_dir) / zip_name
-        crear_zip_lote(lote_dir, zip_path)
-
-        dest_zip = os.path.abspath(zip_name)
-        shutil.copy(zip_path, dest_zip)
-        shutil.rmtree(temp_dir, ignore_errors=True)
-
-        background_tasks.add_task(os.remove, dest_zip)
-        return FileResponse(dest_zip, filename=zip_name, media_type="application/zip")
-    except HTTPException:
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        raise
-    except Exception as e:
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        raise HTTPException(
-            status_code=500,
-            detail=generic_error_detail(e, "generación de paquetes de video"),
-        )
 

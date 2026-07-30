@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -7,18 +8,14 @@ const nextConfig = {
     unoptimized: true,
   },
   experimental: {
-    proxyClientMaxBodySize: "2gb",
+    // Compresor MP4: subidas grandes sin límite práctico en local
+    proxyClientMaxBodySize: "50gb",
     // Por defecto Next.js corta el proxy a los 30 s; videos grandes necesitan más tiempo.
     proxyTimeout: 600000,
   },
   async rewrites() {
-    const backend = process.env.BACKEND_URL || "http://127.0.0.1:8000"
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${backend}/api/:path*`,
-      },
-    ]
+    // Las rutas /api/* las atiende app/api/[...path]/route.ts (proxy con cookies).
+    return []
   },
 }
 

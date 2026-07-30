@@ -1,0 +1,36 @@
+# Git / IDE
+.git
+.gitignore
+.cursor
+**/.env
+**/.env.*
+!**/.env.example
+
+# Docs y artefactos locales
+_zip_import
+docs
+logs
+*.md
+prueba
+test_sample_consulta.txt
+backend/cookies.txt
+backend/users.db
+backend/*.db
+backend/data
+**/__pycache__
+**/.venv
+**/venv
+**/node_modules
+**/.next
+**/.turbo
+**/.vercel
+*.zip
+
+# Compresor: no copiar binarios Windows ni runtime local
+compresor_video/bin/
+compresor_video/input/
+compresor_video/output/
+compresor_video/temp/
+compresor_video/logs/
+compresor_video/server/
+compresor_video/app/

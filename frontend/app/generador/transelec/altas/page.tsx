@@ -55,12 +55,25 @@ export default function TranselecAltasPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const loadConfig = useCallback(async () => {
+    setErrorMsg("")
     const res = await apiFetch("/api/generador/transelec/config")
     if (res.ok) {
       const data = await res.json()
       setCursos(data.cursos || [])
       setGrupos(data.grupos || [])
       if (data.grupos?.length && !grupo) setGrupo(data.grupos[0])
+      return
+    }
+    if (res.status === 404) {
+      setErrorMsg(
+        "No se encontró el módulo Transelec en el backend. Reinicia con Iniciar_Web.bat y actualiza el código desde GitHub."
+      )
+    } else if (res.status === 403) {
+      setErrorMsg("No tienes permiso para usar el Generador de Cargas.")
+    } else if (res.status === 401) {
+      setErrorMsg("Sesión expirada. Vuelve a iniciar sesión.")
+    } else {
+      setErrorMsg(`No se pudo cargar el catálogo Transelec (error ${res.status}).`)
     }
   }, [grupo])
 

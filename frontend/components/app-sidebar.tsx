@@ -12,10 +12,9 @@ import {
   LayoutGrid,
   LogOut,
   Users,
-  Package,
-  Film,
   FileSpreadsheet,
   Clapperboard,
+  Shield,
 } from "lucide-react"
 import { ThemeSettings } from "@/components/theme-settings"
 import { GeneradorNominaMenu } from "@/components/generador-nomina-menu"
@@ -49,15 +48,8 @@ function canAccessModule(
   return user.permissions.includes(moduleName)
 }
 
-function isVideoPath(pathname: string) {
-  return pathname === "/generador/videos" || pathname.startsWith("/generador/videos/")
-}
-
 function isNominaPath(pathname: string) {
-  return (
-    pathname === "/generador" ||
-    (pathname.startsWith("/generador/") && !isVideoPath(pathname))
-  )
+  return pathname === "/generador" || pathname.startsWith("/generador/")
 }
 
 export function AppSidebar() {
@@ -72,8 +64,7 @@ export function AppSidebar() {
   })
 
   const showGenerador = canAccessModule(user, "generador")
-  const generadorActive = isNominaPath(pathname) || isVideoPath(pathname)
-  const videoActive = isVideoPath(pathname)
+  const generadorActive = isNominaPath(pathname)
 
   return (
     <aside className="relative z-[90] flex h-screen w-64 shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
@@ -118,20 +109,6 @@ export function AppSidebar() {
               </div>
               <ul className="space-y-1">
                 <GeneradorNominaMenu />
-                <li>
-                  <Link
-                    href="/generador/videos"
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-lg py-2.5 pl-6 pr-3 text-sm font-medium transition-colors",
-                      videoActive
-                        ? "bg-sidebar-accent text-primary"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    )}
-                  >
-                    <Film className="h-4 w-4 shrink-0" />
-                    Paquetes de Video
-                  </Link>
-                </li>
               </ul>
             </li>
           )}
@@ -148,8 +125,8 @@ export function AppSidebar() {
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
               )}
             >
-              <Users className="h-5 w-5" />
-              Administrar Usuarios
+              <Shield className="h-5 w-5" />
+              Panel de Administrador
             </Link>
           )}
         </div>

@@ -5,6 +5,7 @@ __pycache__/
 venv/
 env/
 .env
+!.env.docker.example
 
 # Next.js / Node
 node_modules/
@@ -42,6 +43,9 @@ test_generador_local.py
 *.zip
 
 backend/data/
+
+# Logs locales de arranque
+logs/
 
 # Compresor de videos (binarios y datos locales)
 compresor_video/bin/ffmpeg.exe

@@ -1,0 +1,94 @@
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=caching_sha2_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Definir MYSQL_ROOT_PASSWORD en .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-herramientas}
+      MYSQL_USER: ${MYSQL_USER:-herramientas}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Definir MYSQL_PASSWORD en .env}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-uroot",
+          "-p${MYSQL_ROOT_PASSWORD}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      # Preferir variables separadas (evita problemas con caracteres especiales en la URL)
+      MYSQL_HOST: db
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-herramientas}
+      MYSQL_USER: ${MYSQL_USER:-herramientas}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Definir MYSQL_PASSWORD en .env}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Definir JWT_SECRET_KEY en .env}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      ADMIN_MASTER_USER: ${ADMIN_MASTER_USER:-admin}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      PUBLIC_FRONTEND_URL: ${PUBLIC_FRONTEND_URL:-http://localhost:3000}
+      MATRIZ_CURSOS_PATH: /app/cursos bex Moodle.xlsx
+      CROSS_SITE_AUTH: ${CROSS_SITE_AUTH:-false}
+      COMPRESOR_ROOT: /app/compresor_video
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - compresor_input:/app/compresor_video/input
+      - compresor_output:/app/compresor_video/output
+      - compresor_temp:/app/compresor_video/temp
+      - compresor_logs:/app/compresor_video/logs
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 50s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: ""
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+volumes:
+  mysql_data:
+  compresor_input:
+  compresor_output:
+  compresor_temp:
+  compresor_logs:

@@ -10,10 +10,7 @@ import { cn } from "@/lib/utils"
 const FLYOUT_Z = "z-[200]"
 
 function isNominaPath(pathname: string) {
-  return (
-    pathname === "/generador" ||
-    (pathname.startsWith("/generador/") && !pathname.startsWith("/generador/videos"))
-  )
+  return pathname === "/generador" || pathname.startsWith("/generador/")
 }
 
 function isClienteActive(pathname: string, clienteId: string) {

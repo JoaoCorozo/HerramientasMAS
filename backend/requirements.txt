@@ -9,5 +9,6 @@ pyjwt
 bcrypt>=4.0.0
 python-multipart
 psycopg2-binary
+PyMySQL>=1.1.0
 cryptography
 python-dotenv

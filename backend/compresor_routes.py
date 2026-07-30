@@ -4,9 +4,17 @@ from __future__ import annotations
 import asyncio
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 import models
-from compresor_service import INPUT_DIR, ensure_compresor_server, proxy_json
+from compresor_service import (
+    INPUT_DIR,
+    clear_compresor_queue,
+    ensure_compresor_server,
+    proxy_json,
+    resolve_download_zip,
+)
+from config import COMPRESOR_VIDEO_MAX_BYTES
 from deps import require_permission
 from security_utils import generic_error_detail, safe_video_filename, stream_video_upload_to_file
 
@@ -61,7 +69,7 @@ async def compresor_upload(
             while dest.exists():
                 dest = INPUT_DIR / f"{stem}_{counter}{suffix}"
                 counter += 1
-            await stream_video_upload_to_file(upload, dest)
+            await stream_video_upload_to_file(upload, dest, max_bytes=COMPRESOR_VIDEO_MAX_BYTES)
             saved_names.append(dest.name)
 
         return {"ok": True, "uploaded": len(saved_names), "files": saved_names}
@@ -79,6 +87,18 @@ async def compresor_scan(
         return await asyncio.to_thread(proxy_json, "POST", "/api/scan-input", {})
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.post("/clear")
+async def compresor_clear(
+    current_user: models.User = Depends(require_permission("compresor_video")),
+):
+    try:
+        return await asyncio.to_thread(clear_compresor_queue)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
@@ -131,3 +151,21 @@ async def compresor_open_output(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.get("/download/{zip_name}")
+async def compresor_download(
+    zip_name: str,
+    current_user: models.User = Depends(require_permission("compresor_video")),
+):
+    try:
+        path = await asyncio.to_thread(resolve_download_zip, zip_name)
+        return FileResponse(
+            path=str(path),
+            filename=path.name,
+            media_type="application/zip",
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=generic_error_detail(exc, "descarga ZIP"))

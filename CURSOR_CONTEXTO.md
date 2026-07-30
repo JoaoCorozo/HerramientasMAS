@@ -17,7 +17,8 @@ Sistema web interno de BEX para herramientas de productividad: comparar Excels, 
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind v4, shadcn/Radix | `frontend/` |
 | Backend | FastAPI, Python 3.11, SQLAlchemy | `backend/` |
 | BD local | SQLite `backend/users.db` | variable `DATABASE_URL` |
-| BD producción | PostgreSQL (Neon) | misma variable en Render |
+| BD Docker / servidor | MySQL 8 (`docker compose`) | ver `DEPLOY_DOCKER.md` |
+| BD producción (alternativa) | PostgreSQL (Neon) | misma variable en Render |
 
 Existe también una **app de escritorio** (CustomTkinter) en otra carpeta; **no es este repo**.
 
@@ -65,7 +66,7 @@ En local, `frontend/lib/api.ts` usa rutas relativas `/api/...`. Next reescribe a
 ├── backend/
 │   ├── main.py              # FastAPI: todos los endpoints
 │   ├── models.py            # User, AppData, MoodleCourse, InductionProfile, ProfileCourse
-│   ├── database.py          # Engine SQLite/PostgreSQL
+│   ├── database.py          # Engine SQLite / MySQL / PostgreSQL
 │   ├── auth.py, deps.py     # JWT, permisos por módulo
 │   ├── matriz_db.py         # Catálogo y perfiles en BD (generador)
 │   ├── matriz_cursos.py     # Lectura Excel (catálogo + hojas perfil)
@@ -83,10 +84,14 @@ En local, `frontend/lib/api.ts` usa rutas relativas `/api/...`. Next reescribe a
 │   └── public/mail-composer-prefill.js  # Script para sitio externo BEX
 ├── docs/                    # Manual, capturas, integración Mail Composer
 ├── cursos bex Moodle.xlsx   # Catálogo Moodle (id, shortname) — va en Docker
-├── Dockerfile, render.yaml  # Deploy backend Render
+├── Dockerfile, docker-compose.yml  # Deploy Docker + MySQL
+├── DEPLOY_DOCKER.md                # Guía Docker/MySQL
+├── render.yaml                     # Deploy backend Render (opcional)
 ├── Iniciar_Web.bat
-└── CURSOR_CONTEXTO.md       # Este archivo
+└── CURSOR_CONTEXTO.md              # Este archivo
 ```
+
+Deploy Docker: `DEPLOY_DOCKER.md`. Deploy Vercel+Render+Neon: `DEPLOY_NUBE.md`.
 
 ---
 

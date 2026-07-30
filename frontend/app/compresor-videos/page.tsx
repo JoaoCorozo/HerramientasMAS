@@ -258,6 +258,38 @@ export default function CompresorVideosPage() {
     }
   }
 
+  const handleClearQueue = async () => {
+    if (active) return
+    const confirmed = window.confirm(
+      "¿Limpiar la cola y borrar los MP4 de la carpeta input?\n\nLos ZIP ya generados en la carpeta de salida no se borran."
+    )
+    if (!confirmed) return
+
+    setUploading(true)
+    setUploadStatus("Limpiando…")
+    showAlert("")
+    try {
+      const data = await requestJson("/api/compresor-video/clear", { method: "POST", body: "{}" })
+      applyItemsResponse(data)
+      const removed = Number((data as { removedFiles?: number }).removedFiles || 0)
+      const warning = (data as { warning?: string; message?: string }).warning
+      const message = (data as { message?: string }).message
+      showAlert(
+        warning ||
+          message ||
+          (removed > 0
+            ? `Limpieza lista: se quitaron ${removed} archivo(s) de input.`
+            : "Cola y carpeta input limpiadas."),
+        warning ? "error" : "info"
+      )
+    } catch (error) {
+      showAlert(error instanceof Error ? error.message : "No se pudo limpiar")
+    } finally {
+      setUploading(false)
+      setUploadStatus("")
+    }
+  }
+
   const handleStart = () => {
     showAlert("")
     setModalError("")
@@ -297,10 +329,22 @@ export default function CompresorVideosPage() {
   const handleOpenOutput = async () => {
     showAlert("")
     try {
-      await requestJson("/api/compresor-video/open-output", { method: "POST", body: "{}" })
+      const data = await requestJson("/api/compresor-video/open-output", { method: "POST", body: "{}" })
+      const msg =
+        typeof data.message === "string" && data.message
+          ? data.message
+          : data.opened
+            ? "Carpeta de salida abierta."
+            : "En servidor/Docker usa el botón Descargar ZIP de cada video finalizado."
+      showAlert(msg, data.opened ? "info" : "info")
     } catch (error) {
       showAlert(error instanceof Error ? error.message : "No se pudo abrir la carpeta")
     }
+  }
+
+  const handleDownloadZip = (zipName: string) => {
+    if (!zipName) return
+    window.location.href = `/api/compresor-video/download/${encodeURIComponent(zipName)}`
   }
 
   const handleStop = async () => {
@@ -342,7 +386,7 @@ export default function CompresorVideosPage() {
                 <div>
                   <h1>Compresor de videos MP4</h1>
                   <p className="subtitle">
-                    Optimiza videos y genera paquetes ZIP listos para cargar en Moodle (solo Windows).
+                    Optimiza videos y genera paquetes ZIP listos para cargar en Moodle.
                   </p>
                 </div>
               </div>
@@ -395,6 +439,14 @@ export default function CompresorVideosPage() {
                   Escanear carpeta
                 </button>
                 <button
+                  className="button secondary"
+                  type="button"
+                  disabled={active || uploading}
+                  onClick={handleClearQueue}
+                >
+                  Limpiar cola
+                </button>
+                <button
                   className="button success"
                   type="button"
                   disabled={active || !hasItems}
@@ -403,7 +455,7 @@ export default function CompresorVideosPage() {
                   Optimizar
                 </button>
                 <button className="button secondary" type="button" onClick={handleOpenOutput}>
-                  Carpeta de salida
+                  Carpeta / ZIPs
                 </button>
               </div>
             </section>
@@ -500,6 +552,15 @@ export default function CompresorVideosPage() {
                           </span>
                         </div>
                         <div className="video-actions">
+                          {item.status === "done" && zipName ? (
+                            <button
+                              className="button secondary"
+                              type="button"
+                              onClick={() => handleDownloadZip(zipName)}
+                            >
+                              Descargar ZIP
+                            </button>
+                          ) : null}
                           {isRunning ? (
                             <button
                               className="stop-video-btn"
