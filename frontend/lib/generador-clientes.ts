@@ -51,7 +51,10 @@ export const GENERADOR_NAV_CLIENTES: GeneradorNavCliente[] = [
     id: "carozzi",
     nombre: "Carozzi",
     disponible: true,
-    procesos: [{ label: "Comparar DNI / C.I.", href: "/generador/carozzi" }],
+    procesos: [
+      { label: "Comparar DNI / C.I.", href: "/generador/carozzi" },
+      { label: "Comparador Todos Chile", href: "/generador/carozzi/todos-chile" },
+    ],
   },
   { id: "habitat", nombre: "Habitat", disponible: false, procesos: [] },
   { id: "enaex", nombre: "Enaex", disponible: false, procesos: [] },
@@ -98,7 +101,7 @@ export const GENERADOR_CLIENTES: GeneradorCliente[] = [
     id: "carozzi",
     nombre: "Carozzi",
     descripcion:
-      "Compara DNI del listado cliente (Excel/CSV) con C.I. de la nómina plataforma (CSV). Normaliza a 8 dígitos y descarga Coincidencias + Faltantes.",
+      "Comparadores Carozzi: DNI/C.I. (Molitalia) y Todos Chile (reporte vs BBDD por RUT).",
     href: "/generador/carozzi",
     disponible: true,
   },
