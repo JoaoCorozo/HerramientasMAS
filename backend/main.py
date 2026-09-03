@@ -314,16 +314,20 @@ def _send_welcome_email(
 
     port = int(smtp_cfg.get("port") or 587)
     host = smtp_cfg["host"]
-    with smtplib.SMTP(host, port, timeout=30) as srv:
-        srv.ehlo()
-        if port != 465:
-            try:
+    use_tls = bool(smtp_cfg.get("use_tls", True)) or port in (587, 465)
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=45) as srv:
+            srv.ehlo()
+            srv.login(smtp_cfg["username"], smtp_cfg["password"])
+            srv.sendmail(sender_addr, [to_email], msg.as_string())
+    else:
+        with smtplib.SMTP(host, port, timeout=45) as srv:
+            srv.ehlo()
+            if use_tls:
                 srv.starttls()
                 srv.ehlo()
-            except smtplib.SMTPException:
-                pass
-        srv.login(smtp_cfg["username"], smtp_cfg["password"])
-        srv.sendmail(sender_addr, [to_email], msg.as_string())
+            srv.login(smtp_cfg["username"], smtp_cfg["password"])
+            srv.sendmail(sender_addr, [to_email], msg.as_string())
 
 
 def _normalize_person_name(value: str | None, field: str) -> str:
@@ -411,10 +415,14 @@ def set_auth_cookie(response: Response, access_token: str) -> None:
 @app.get("/api/health")
 def health_check():
     from paths import resolve_matriz_cursos_path
+    from database import engine
+
+    dialect = getattr(getattr(engine, "dialect", None), "name", "unknown")
     return {
         "status": "ok",
         "env": config.APP_ENV,
         "database": "configured" if config.SQLALCHEMY_DATABASE_URL else "missing",
+        "database_dialect": dialect,
         "matriz_cursos": bool(resolve_matriz_cursos_path()),
     }
 

@@ -161,8 +161,15 @@ export default function UsuariosPage() {
           )
         }
       } else {
-        const data = await res.json()
-        alert(typeof data.detail === "string" ? data.detail : data.detail || "Error guardando usuario")
+        const data = await res.json().catch(() => ({}))
+        const detail = data?.detail
+        const message =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((d: { msg?: string }) => d?.msg).filter(Boolean).join("\n")
+              : "Error guardando usuario"
+        alert(message)
       }
     } catch (error) {
       console.error(error)
