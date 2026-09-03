@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
+const isVercel = Boolean(process.env.VERCEL)
+
 const nextConfig = {
-  output: "standalone",
+  // standalone solo para Docker/local; en Vercel rompe el empaquetado del deploy
+  ...(isVercel ? {} : { output: "standalone" }),
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -8,10 +11,9 @@ const nextConfig = {
     unoptimized: true,
   },
   experimental: {
-    // Compresor MP4: subidas grandes sin límite práctico en local
-    proxyClientMaxBodySize: "50gb",
-    // Por defecto Next.js corta el proxy a los 30 s; videos grandes necesitan más tiempo.
-    proxyTimeout: 600000,
+    // En Vercel hay límites de body/timeout; valores extremos pueden fallar el deploy
+    proxyClientMaxBodySize: isVercel ? "100mb" : "50gb",
+    proxyTimeout: isVercel ? 60000 : 600000,
   },
   async rewrites() {
     // Las rutas /api/* las atiende app/api/[...path]/route.ts (proxy con cookies).

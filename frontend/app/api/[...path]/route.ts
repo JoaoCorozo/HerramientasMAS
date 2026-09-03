@@ -2,7 +2,8 @@ import { NextRequest } from "next/server"
 import { proxyToBackend } from "@/lib/proxy-backend"
 
 export const runtime = "nodejs"
-export const maxDuration = 600
+// Hobby: 60s, Pro: hasta 300s. 600 rompe el deploy en planes estándar de Vercel.
+export const maxDuration = 60
 
 type RouteContext = { params: Promise<{ path: string[] }> }
 
