@@ -55,3 +55,6 @@ compresor_video/input/*
 !compresor_video/input/.gitkeep
 compresor_video/output/*
 !compresor_video/output/.gitkeep
+
+.vercel
+.env*

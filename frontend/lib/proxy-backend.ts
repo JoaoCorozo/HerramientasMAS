@@ -1,7 +1,13 @@
 const BACKEND = process.env.BACKEND_URL || "http://127.0.0.1:8000"
 
 const SKIP_REQUEST_HEADERS = new Set(["host", "connection", "content-length"])
-const SKIP_RESPONSE_HEADERS = new Set(["transfer-encoding", "connection"])
+// fetch() ya descomprime el body; no reenviar encoding/length del upstream
+const SKIP_RESPONSE_HEADERS = new Set([
+  "transfer-encoding",
+  "connection",
+  "content-encoding",
+  "content-length",
+])
 
 export async function proxyToBackend(request: Request, pathSegments: string[]) {
   const subPath = pathSegments.join("/")
