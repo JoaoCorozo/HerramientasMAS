@@ -33,6 +33,7 @@ export const GENERADOR_NAV_CLIENTES: GeneradorNavCliente[] = [
     procesos: [
       { label: "Altas de usuarios nuevos", href: "/generador/transelec/altas" },
       { label: "Externos", href: "/generador/transelec/matriz" },
+      { label: "Asignación Transelec", href: "/generador/transelec/asignacion" },
     ],
   },
   {
@@ -77,7 +78,8 @@ export const GENERADOR_CLIENTES: GeneradorCliente[] = [
   {
     id: "transelec",
     nombre: "Transelec",
-    descripcion: "Altas de usuarios nuevos y Externos (nómina ingresos externos en Subestaciones y/o Líneas).",
+    descripcion:
+      "Altas de usuarios nuevos, Externos (nómina ingresos) y Asignación (quién falta en la nómina LMS).",
     href: "/generador/transelec",
     disponible: true,
   },

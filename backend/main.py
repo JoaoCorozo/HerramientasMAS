@@ -1371,7 +1371,7 @@ async def api_inspect_excel(
 async def api_preview_carga(
     file: UploadFile = File(...),
     sheet_name: str = Form(...),
-    grupo: str = Form(...),
+    grupo: str = Form(""),
     mapping: str = Form(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_permission("generador")),
@@ -1401,56 +1401,30 @@ async def api_preview_carga(
         header = [str(c).strip() if c else "" for c in rows_dot[0]]
         col_name_to_idx = {name: idx for idx, name in enumerate(header) if name}
         
-        previews = {}
-        data_rows = rows_dot[1:]
-        perfiles_sin_cursos: set[str] = set()
-        
-        for r in data_rows:
+        out_headers = list(mapping_dict.keys())
+        preview_rows = []
+
+        for r in rows_dot[1:]:
             if not any(r):
                 continue
-                
-            res = process_row_mapping(r, col_name_to_idx, mapping_dict, grupo, db)
-            if not res["courses"] and res["perfil_norm"] != "SIN_PERFIL":
-                perfiles_sin_cursos.add(res["perfil_original"])
-            p_norm = res["perfil_norm"]
-            p_original = res["perfil_original"]
-            processed_row = res["processed_row"]
-            courses = res["courses"]
-            
-            if p_norm not in previews:
-                out_headers = list(mapping_dict.keys())
-                for i in range(1, len(courses) + 1):
-                    out_headers.append(f"group{i}")
-                    out_headers.append(f"course{i}")
-                
-                previews[p_norm] = {
-                    "profile_name": p_original,
-                    "headers": out_headers,
-                    "rows": []
-                }
-                
-            if len(previews[p_norm]["rows"]) < 10:
-                row_vals = []
-                for out_col in mapping_dict.keys():
-                    row_vals.append(processed_row.get(out_col, ""))
-                for course in courses:
-                    row_vals.append(grupo)
-                    row_vals.append(course)
-                previews[p_norm]["rows"].append(row_vals)
 
+            res = process_row_mapping(r, col_name_to_idx, mapping_dict, grupo, db)
+            processed_row = res["processed_row"]
+
+            if len(preview_rows) < 10:
+                preview_rows.append([processed_row.get(out_col, "") for out_col in mapping_dict.keys()])
+
+        previews = {}
         warnings = []
-        if perfiles_sin_cursos:
-            info = get_matriz_info_db(db)
-            nombres = ", ".join(p["hoja"] for p in info.get("perfiles", []))
+        if preview_rows:
+            previews["salida"] = {
+                "profile_name": "Salida",
+                "headers": out_headers,
+                "rows": preview_rows,
+            }
+        else:
             warnings.append(
-                "Perfiles sin cursos asignados: "
-                + ", ".join(sorted(perfiles_sin_cursos))
-                + f". Cree o edite el perfil en «Perfiles de inducción» (disponibles: {nombres})."
-                + " El valor de PERFIL DE INDUCCIÓN debe coincidir con el nombre del perfil."
-            )
-        if not previews:
-            warnings.append(
-                "No se generaron filas. Verifique usuario/RUT y que exista columna PERFIL DE INDUCCIÓN."
+                "No se generaron filas. Verifique que el archivo tenga datos y que el mapeo incluya usuario/RUT cuando corresponda."
             )
 
         return {"previews": previews, "warnings": warnings}
@@ -1464,7 +1438,7 @@ async def api_generar_carga(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     sheet_name: str = Form(...),
-    grupo: str = Form(...),
+    grupo: str = Form(""),
     mapping: str = Form(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_permission("generador")),
@@ -1493,76 +1467,39 @@ async def api_generar_carga(
         header = [str(c).strip() if c else "" for c in rows_dot[0]]
         col_name_to_idx = {name: idx for idx, name in enumerate(header) if name}
         
-        colaboradores_por_perfil = {}
+        out_headers = list(mapping_dict.keys())
+        csv_rows = []
         for r_idx, r in enumerate(rows_dot[1:]):
             if not any(r):
                 continue
-                
+
             res = process_row_mapping(r, col_name_to_idx, mapping_dict, grupo, db)
-            p_norm = res["perfil_norm"]
-            p_original = res["perfil_original"]
             processed_row = res["processed_row"]
-            courses = res["courses"]
-            
+
             username = processed_row.get("username")
             if not username:
                 continue
-                
-            if p_norm not in colaboradores_por_perfil:
-                colaboradores_por_perfil[p_norm] = {
-                    "original_name": p_original,
-                    "courses": courses,
-                    "items": []
-                }
-            colaboradores_por_perfil[p_norm]["items"].append(processed_row)
-            
-        generated_files = []
-        for p_norm, p_data in colaboradores_por_perfil.items():
-            original_name = p_data["original_name"]
-            items = p_data["items"]
-            cursos = p_data["courses"]
-            
-            out_headers = list(mapping_dict.keys())
-            for i in range(1, len(cursos) + 1):
-                out_headers.append(f"group{i}")
-                out_headers.append(f"course{i}")
-                
-            safe_p_name = "".join(c for c in p_norm if c.isalnum() or c in (" ", "_", "-")).replace(" ", "_")
-            csv_filename = f"script_{safe_p_name}.csv"
-            csv_filepath = os.path.join(temp_dir, csv_filename)
-            
-            with open(csv_filepath, mode="w", newline="", encoding="utf-8-sig") as csv_file:
-                writer = csv.writer(csv_file, delimiter=";")
-                writer.writerow(out_headers)
-                
-                for item in items:
-                    row = []
-                    for out_col in mapping_dict.keys():
-                        row.append(item.get(out_col, ""))
-                    for course in cursos:
-                        row.append(grupo)
-                        row.append(course)
-                    writer.writerow(row)
-                    
-            generated_files.append(csv_filepath)
-            
-        if not generated_files:
+
+            csv_rows.append([processed_row.get(out_col, "") for out_col in mapping_dict.keys()])
+
+        if not csv_rows:
             raise HTTPException(status_code=400, detail="No se generaron registros válidos del archivo de entrada.")
-            
-        zip_name = f"Cargas_Induccion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
-        zip_path = os.path.join(temp_dir, zip_name)
-        
-        with zipfile.ZipFile(zip_path, "w") as zip_f:
-            for fpath in generated_files:
-                zip_f.write(fpath, os.path.basename(fpath))
-                
-        dest_zip_path = os.path.abspath(zip_name)
-        shutil.copy(zip_path, dest_zip_path)
-        
+
+        csv_name = f"Carga_BEX_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        csv_path = os.path.join(temp_dir, csv_name)
+
+        with open(csv_path, mode="w", newline="", encoding="utf-8-sig") as csv_file:
+            writer = csv.writer(csv_file, delimiter=";")
+            writer.writerow(out_headers)
+            writer.writerows(csv_rows)
+
+        dest_csv_path = os.path.abspath(csv_name)
+        shutil.copy(csv_path, dest_csv_path)
+
         shutil.rmtree(temp_dir)
-        
-        background_tasks.add_task(os.remove, dest_zip_path)
-        return FileResponse(path=dest_zip_path, filename=zip_name, media_type="application/zip")
+
+        background_tasks.add_task(os.remove, dest_csv_path)
+        return FileResponse(path=dest_csv_path, filename=csv_name, media_type="text/csv")
         
     except HTTPException as he:
         raise he

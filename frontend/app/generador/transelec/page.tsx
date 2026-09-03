@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowLeft, FileSpreadsheet, UserPlus } from "lucide-react"
+import { ArrowLeft, FileSpreadsheet, UserPlus, UsersRound } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 
@@ -19,6 +19,13 @@ const PROCESOS = [
     description:
       "Script para generar nómina de ingresos externos en los cursos Subestaciones y/o Líneas de transmisión.",
     icon: FileSpreadsheet,
+  },
+  {
+    href: "/generador/transelec/asignacion",
+    title: "Asignación Transelec",
+    description:
+      "Compara el Excel de Asignación RH con el CSV de Nómina LMS y lista quiénes de Asignación no están en la nómina.",
+    icon: UsersRound,
   },
 ]
 

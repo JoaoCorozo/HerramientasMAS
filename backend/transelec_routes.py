@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import tempfile
@@ -15,7 +16,14 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from deps import require_permission
-from security_utils import generic_error_detail, read_upload_limited, safe_upload_filename
+from security_utils import (
+    generic_error_detail,
+    read_upload_limited,
+    safe_csv_filename,
+    safe_planilla_filename,
+    safe_upload_filename,
+)
+from transelec_asignacion_comparador import generar_reporte_bytes as generar_reporte_asignacion_bytes
 from transelec_db import ensure_transelec_seeded, get_catalog, save_catalog
 from transelec_parser import (
     generar_csv_alta_bytes,
@@ -238,5 +246,39 @@ async def api_matriz_generar(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=generic_error_detail(e, "generación matriz"))
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@router.post("/asignacion/comparar")
+async def api_asignacion_comparar(
+    archivo_asignacion: UploadFile = File(...),
+    archivo_nomina: UploadFile = File(...),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    """Compara Asignación RH (Excel) vs Nómina LMS (CSV): quién falta en la nómina."""
+    temp_dir = tempfile.mkdtemp()
+    try:
+        path_asig = Path(temp_dir) / safe_planilla_filename(archivo_asignacion.filename)
+        path_nom = Path(temp_dir) / safe_csv_filename(archivo_nomina.filename)
+        path_asig.write_bytes(await read_upload_limited(archivo_asignacion))
+        path_nom.write_bytes(await read_upload_limited(archivo_nomina))
+
+        content, filename, stats = generar_reporte_asignacion_bytes(path_asig, path_nom)
+        headers = {
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Report-Stats": json.dumps(stats),
+        }
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=generic_error_detail(e, "comparación Asignación"))
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)

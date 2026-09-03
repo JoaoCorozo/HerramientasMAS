@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { Play, Upload, FileSpreadsheet, Package, RefreshCw, AlertCircle, ArrowLeft, ArrowRight, Check, Eye, HelpCircle } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -9,7 +9,6 @@ import { apiFetch } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { GeneradorProfileManager } from "@/components/generador-profile-manager"
 
 const STANDARD_COLUMNS = [
   "username", "institution", "password", "middlename", "department", "address", "aim", 
@@ -61,35 +60,16 @@ export default function GeneradorPage() {
   
   // Mapping configuration
   const [mappings, setMappings] = useState<Record<string, MappingConfig>>({})
-  const [grupo, setGrupo] = useState("")
   
   // Preview state
   const [previews, setPreviews] = useState<Record<string, PreviewProfile>>({})
   const [activePreviewTab, setActivePreviewTab] = useState("")
-  const [matrizInfo, setMatrizInfo] = useState<{
-    loaded?: boolean
-    catalogo_cursos?: number
-    perfiles?: { hoja: string; cantidad_ids: number }[]
-    error?: string
-  } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const refreshMatrizInfo = useCallback(() => {
-    apiFetch("/api/excel/matriz-info")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setMatrizInfo(data))
-      .catch(() => setMatrizInfo({ loaded: false, error: "No se pudo leer la matriz de cursos" }))
-  }, [])
-
-  useEffect(() => {
-    refreshMatrizInfo()
-  }, [])
 
   // LocalStorage mapping persistence
   useEffect(() => {
     const saved = localStorage.getItem("generador_mappings")
-    const savedGrupo = localStorage.getItem("generador_grupo")
     if (saved) {
       try {
         setMappings(JSON.parse(saved))
@@ -97,14 +77,10 @@ export default function GeneradorPage() {
         console.error("Error loading saved mappings", e)
       }
     }
-    if (savedGrupo) {
-      setGrupo(savedGrupo)
-    }
   }, [])
 
-  const saveMappingsToLocal = (currentMappings: Record<string, MappingConfig>, currentGrupo: string) => {
+  const saveMappingsToLocal = (currentMappings: Record<string, MappingConfig>) => {
     localStorage.setItem("generador_mappings", JSON.stringify(currentMappings))
-    localStorage.setItem("generador_grupo", currentGrupo)
   }
 
   // Handle file upload and immediate inspection
@@ -249,12 +225,7 @@ export default function GeneradorPage() {
       }
     }
     setMappings(updated)
-    saveMappingsToLocal(updated, grupo)
-  }
-
-  const handleGrupoChange = (val: string) => {
-    setGrupo(val)
-    saveMappingsToLocal(mappings, val)
+    saveMappingsToLocal(updated)
   }
 
   // Generate mapping payload containing only the selected columns
@@ -269,10 +240,6 @@ export default function GeneradorPage() {
   // Request Preview from Backend (First 10 Rows)
   const handleGetPreview = async () => {
     if (!file) return
-    if (!grupo.trim()) {
-      setErrorMsg("Por favor, ingresa el nombre del grupo de inducción.")
-      return
-    }
 
     setLoading(true)
     setErrorMsg("")
@@ -282,7 +249,7 @@ export default function GeneradorPage() {
       const formData = new FormData()
       formData.append("file", file)
       formData.append("sheet_name", selectedSheet)
-      formData.append("grupo", grupo)
+      formData.append("grupo", "")
       formData.append("mapping", JSON.stringify(getSelectedMappingPayload()))
 
       const response = await apiFetch("/api/excel/preview", {
@@ -320,13 +287,9 @@ export default function GeneradorPage() {
     }
   }
 
-  // Download complete Zip
+  // Download complete CSV
   const handleDownloadZip = async () => {
     if (!file) return
-    if (!grupo.trim()) {
-      setErrorMsg("Por favor, ingresa el nombre del grupo de inducción.")
-      return
-    }
 
     setLoading(true)
     setErrorMsg("")
@@ -336,7 +299,7 @@ export default function GeneradorPage() {
       const formData = new FormData()
       formData.append("file", file)
       formData.append("sheet_name", selectedSheet)
-      formData.append("grupo", grupo)
+      formData.append("grupo", "")
       formData.append("mapping", JSON.stringify(getSelectedMappingPayload()))
 
       const response = await apiFetch("/api/excel/generar-carga", {
@@ -353,13 +316,13 @@ export default function GeneradorPage() {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `Scripts_Carga_Induccion_${new Date().toISOString().slice(0, 10)}.zip`
+      a.download = `Carga_BEX_${new Date().toISOString().slice(0, 10)}.csv`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
 
-      setSuccessMsg("¡Procesamiento exitoso! Tu archivo ZIP con los CSVs por perfil se ha descargado.")
+      setSuccessMsg("¡Procesamiento exitoso! Tu archivo CSV se ha descargado.")
     } catch (err: any) {
       console.error(err)
       setErrorMsg(err.message || "Error inesperado al conectar con el servidor.")
@@ -395,7 +358,7 @@ export default function GeneradorPage() {
                 </p>
                 <h1 className="text-2xl font-semibold text-foreground">BEX · Nóminas</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Crea planillas CSV UTF-8 por perfil. Catálogo Moodle en base de datos; perfiles editables en la app.
+                  Genera una planilla CSV UTF-8 base a partir del mapeo del Excel, sin asignar cursos por perfil.
                 </p>
               </div>
             </div>
@@ -441,34 +404,6 @@ export default function GeneradorPage() {
           </div>
 
           <div className="grid gap-6 min-w-0">
-
-            <GeneradorProfileManager
-              matrizPerfiles={matrizInfo?.perfiles}
-              onMatrizChange={refreshMatrizInfo}
-            />
-
-            {matrizInfo && (
-              <div
-                className={`rounded-xl border p-4 text-sm ${
-                  matrizInfo.loaded
-                    ? "border-primary/30 bg-primary/5 text-foreground"
-                    : "border-destructive/30 bg-destructive/10 text-destructive"
-                }`}
-              >
-                {matrizInfo.loaded ? (
-                  <>
-                    <strong>Base de datos:</strong> {matrizInfo.catalogo_cursos} cursos Moodle,{" "}
-                    {matrizInfo.perfiles?.length ?? 0} perfiles de inducción configurados.
-                    El <strong>PERFIL DE INDUCCIÓN</strong> en la dotación debe coincidir con el nombre del perfil.
-                  </>
-                ) : (
-                  <>
-                    {matrizInfo.error ??
-                      "Catálogo vacío. Coloque «cursos bex Moodle.xlsx» en el servidor y reinicie, o use Sincronizar catálogo."}
-                  </>
-                )}
-              </div>
-            )}
             
             {/* PASO 1: Subida de Excel */}
             {step === 1 && (
@@ -602,7 +537,7 @@ export default function GeneradorPage() {
               <div className="rounded-xl border border-border bg-card p-6 shadow-sm animate-fade-in">
                 <div className="flex justify-between items-center mb-6">
                   <div>
-                    <h2 className="text-lg font-medium text-card-foreground">Mapeo de Datos e Inducción</h2>
+                    <h2 className="text-lg font-medium text-card-foreground">Mapeo de Datos</h2>
                     <p className="text-sm text-muted-foreground mt-1">Configura el origen de datos para cada una de las columnas de salida seleccionadas.</p>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => setStep(2)} className="gap-2">
@@ -611,25 +546,6 @@ export default function GeneradorPage() {
                 </div>
 
                 <div className="space-y-6">
-                  {/* Nombre del Grupo de Inducción */}
-                  <div className="grid gap-2 bg-muted/20 p-4 rounded-xl border border-border max-w-2xl">
-                    <Label htmlFor="grupo" className="text-sm font-semibold text-foreground">
-                      Nombre del Grupo de Inducción
-                    </Label>
-                    <Input 
-                      id="grupo"
-                      placeholder="Ej: Grupo Induccion Mayo 2026"
-                      value={grupo}
-                      onChange={(e) => handleGrupoChange(e.target.value)}
-                      className="bg-input"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Este nombre se rellenará en todas las columnas `group1`, `group2`, etc. de los cursos asociados.
-                    </p>
-                  </div>
-
-                  <hr className="border-border" />
-
                   {/* Tabla/Lista de Mapeos */}
                   <div>
                     <Label className="text-sm font-semibold text-foreground mb-3 block">Mapeo de Columnas ({selectedCols.length} seleccionadas)</Label>
@@ -690,17 +606,17 @@ export default function GeneradorPage() {
                     <Button 
                       variant="secondary"
                       onClick={handleGetPreview} 
-                      disabled={loading || !grupo.trim()}
+                      disabled={loading}
                       className="gap-2 h-10"
                     >
                       <Eye className="h-4 w-4" /> Previsualizar 10 Filas
                     </Button>
                     <Button 
                       onClick={handleDownloadZip} 
-                      disabled={loading || !grupo.trim()}
+                      disabled={loading}
                       className="gap-2 h-10 px-6 shadow-lg shadow-primary/20"
                     >
-                      <Play className="h-4 w-4" /> Generar ZIP Completo
+                      <Play className="h-4 w-4" /> Generar CSV Completo
                     </Button>
                   </div>
                 </div>
@@ -714,7 +630,7 @@ export default function GeneradorPage() {
                   <div>
                     <h2 className="text-lg font-medium text-card-foreground">Previsualización de Archivos de Salida</h2>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Verifica las primeras 10 filas que se generarán por perfil antes de realizar la descarga definitiva.
+                      Verifica las primeras 10 filas que se generarán en el archivo de salida antes de realizar la descarga definitiva.
                     </p>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => setStep(3)} className="gap-2">
@@ -727,11 +643,11 @@ export default function GeneradorPage() {
                     <div className="p-8 text-center border border-dashed border-border rounded-xl bg-muted/10">
                       <HelpCircle className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
                       <p className="text-sm text-foreground font-semibold">No se generaron registros para previsualizar</p>
-                      <p className="text-xs text-muted-foreground mt-1">Asegúrate de haber mapeado la columna de "department" o que existan datos válidos.</p>
+                      <p className="text-xs text-muted-foreground mt-1">Asegúrate de haber mapeado correctamente las columnas necesarias y que existan datos válidos.</p>
                     </div>
                   ) : (
                     <>
-                      {/* Pestañas de Perfiles */}
+                      {/* Pestaña de salida */}
                       <div className="flex flex-wrap gap-2 border-b border-border pb-3">
                         {Object.entries(previews).map(([pNorm, pData]) => (
                           <button
@@ -743,7 +659,7 @@ export default function GeneradorPage() {
                                 : "bg-card border-border text-muted-foreground hover:bg-muted"
                             }`}
                           >
-                            📁 {pData.profile_name} ({pData.rows.length} filas)
+                            📄 {pData.profile_name} ({pData.rows.length} filas)
                           </button>
                         ))}
                       </div>
@@ -800,14 +716,14 @@ export default function GeneradorPage() {
 
                   <div className="flex justify-between items-center pt-4 border-t border-border mt-6">
                     <p className="text-xs text-muted-foreground">
-                      * Mostrando máximo 10 filas por perfil. Los archivos CSV se codificarán en UTF-8 con BOM y separador punto y coma (;).
+                      * Mostrando máximo 10 filas. El archivo CSV se codificará en UTF-8 con BOM y separador punto y coma (;).
                     </p>
                     <Button 
                       onClick={handleDownloadZip} 
                       disabled={loading || Object.keys(previews).length === 0}
                       className="gap-2 px-8 h-12 text-base shadow-lg shadow-primary/20"
                     >
-                      <Play className="h-5 w-5 animate-pulse" /> Descargar ZIP Completo (.zip)
+                      <Play className="h-5 w-5 animate-pulse" /> Descargar CSV Completo (.csv)
                     </Button>
                   </div>
                 </div>
@@ -837,7 +753,7 @@ export default function GeneradorPage() {
                 </div>
                 <div className="text-center">
                   <span className="text-sm font-semibold text-foreground block">Procesando planilla Excel</span>
-                  <span className="text-xs text-muted-foreground block mt-1">Normalizando campos y cruzando matriz de cursos...</span>
+                  <span className="text-xs text-muted-foreground block mt-1">Normalizando campos y generando archivo base...</span>
                 </div>
               </div>
             )}

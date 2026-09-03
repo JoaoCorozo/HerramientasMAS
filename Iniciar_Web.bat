@@ -9,7 +9,7 @@ echo   Plataforma Web (Herramientas) - una sola ventana
 echo ===================================================
 echo.
 
-echo [1/4] Dependencias del backend...
+echo [1/5] Dependencias del backend...
 pushd backend
 py -m pip install -q -r requirements.txt
 if errorlevel 1 (
@@ -19,7 +19,15 @@ if errorlevel 1 (
 )
 popd
 
-echo [2/4] Arrancando Backend y Frontend en segundo plano...
+echo [2/5] Deteniendo servidores previos y limpiando cache Next.js...
+call :kill_port 8000
+call :kill_port 3000
+if exist "frontend\.next" (
+  rmdir /s /q "frontend\.next"
+  echo      Cache frontend\.next eliminada - evita 404 en generadores.
+)
+
+echo [3/5] Arrancando Backend y Frontend en segundo plano...
 echo      Compresor MP4 = motor Python dentro del backend (necesita ffmpeg).
 echo      Logs en carpeta logs\
 echo.
@@ -27,10 +35,10 @@ echo.
 start /b "Backend" cmd /c "cd /d %~dp0backend && set DATABASE_URL=sqlite:///./users.db && set APP_ENV=development && set JWT_SECRET_KEY=dev-local-cambiar-en-produccion && set BOOTSTRAP_ADMIN_PASSWORD=admin123 && set CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000 && py -m uvicorn main:app --reload --port 8000 > %~dp0logs\backend.log 2>&1"
 start /b "Frontend" cmd /c "cd /d %~dp0frontend && npm run dev > %~dp0logs\frontend.log 2>&1"
 
-echo [3/4] Esperando 8 segundos a que arranquen...
+echo [4/5] Esperando 8 segundos a que arranquen...
 timeout /t 8 /nobreak >nul
 
-echo [4/4] Abriendo navegador...
+echo [5/5] Abriendo navegador...
 start http://localhost:3000
 
 echo.
