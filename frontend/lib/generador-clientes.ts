@@ -55,6 +55,16 @@ export const GENERADOR_NAV_CLIENTES: GeneradorNavCliente[] = [
     procesos: [
       { label: "Comparar DNI / C.I.", href: "/generador/carozzi" },
       { label: "Comparador Todos Chile", href: "/generador/carozzi/todos-chile" },
+      { label: "Separar cursos activos", href: "/generador/carozzi/separar-cursos" },
+    ],
+  },
+  {
+    id: "emin",
+    nombre: "EMIN",
+    disponible: true,
+    procesos: [
+      { label: "Comparar nóminas", href: "/generador/emin" },
+      { label: "Consolidar cambios cliente", href: "/generador/emin/consolidar-cambios" },
     ],
   },
   { id: "habitat", nombre: "Habitat", disponible: false, procesos: [] },
@@ -103,8 +113,16 @@ export const GENERADOR_CLIENTES: GeneradorCliente[] = [
     id: "carozzi",
     nombre: "Carozzi",
     descripcion:
-      "Comparadores Carozzi: DNI/C.I. (Molitalia) y Todos Chile (reporte vs BBDD por RUT).",
+      "Comparadores Carozzi: DNI/C.I., Todos Chile, y separación de cursos aprobados en activos/inactivos.",
     href: "/generador/carozzi",
+    disponible: true,
+  },
+  {
+    id: "emin",
+    nombre: "EMIN",
+    descripcion:
+      "Compara nómina cliente vs corregida, y consolida cambios cliente (antigua + nueva → unión con auditoría).",
+    href: "/generador/emin",
     disponible: true,
   },
   {
