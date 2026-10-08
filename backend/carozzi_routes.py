@@ -1,4 +1,4 @@
-"""Rutas API comparadores Carozzi (Molitalia DNI + Todos Chile)."""
+"""Rutas API comparadores Carozzi (Molitalia DNI + Todos Chile + separador cursos)."""
 
 from __future__ import annotations
 
@@ -7,12 +7,14 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 import models
 from carozzi_chile_comparador import generar_reporte_bytes as generar_reporte_chile_bytes
 from carozzi_comparador import generar_reporte_bytes
+from carozzi_cursos_separador import generar_reporte_bytes as generar_separacion_bytes
+from carozzi_cursos_separador import listar_cursos_unicos
 from deps import require_permission
 from security_utils import generic_error_detail, read_upload_limited, safe_csv_filename, safe_planilla_filename
 
@@ -84,6 +86,66 @@ async def api_carozzi_comparar_todos_chile(
         raise HTTPException(
             status_code=500,
             detail=generic_error_detail(e, "comparación Carozzi Todos Chile"),
+        )
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@router.post("/cursos-aprobados/listar")
+async def api_carozzi_cursos_listar(
+    archivo_cursos: UploadFile = File(...),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    """Devuelve courseid únicos del CSV de cursos aprobados."""
+    temp_dir = tempfile.mkdtemp()
+    try:
+        path_csv = Path(temp_dir) / safe_csv_filename(archivo_cursos.filename)
+        path_csv.write_bytes(await read_upload_limited(archivo_cursos))
+        cursos = listar_cursos_unicos(path_csv)
+        return {"cursos": cursos, "total_cursos": len(cursos)}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=generic_error_detail(e, "listado de cursos Carozzi"),
+        )
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@router.post("/cursos-aprobados/separar")
+async def api_carozzi_cursos_separar(
+    archivo_cursos: UploadFile = File(...),
+    ids_activos: str = Form(...),
+    current_user: models.User = Depends(require_permission("generador")),
+):
+    """Separa el CSV en hojas Activos / Inactivos según courseid indicados."""
+    temp_dir = tempfile.mkdtemp()
+    try:
+        path_csv = Path(temp_dir) / safe_csv_filename(archivo_cursos.filename)
+        path_csv.write_bytes(await read_upload_limited(archivo_cursos))
+
+        content, filename, stats = generar_separacion_bytes(path_csv, ids_activos)
+        headers = {
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Report-Stats": json.dumps(stats),
+        }
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=generic_error_detail(e, "separación de cursos Carozzi"),
         )
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
