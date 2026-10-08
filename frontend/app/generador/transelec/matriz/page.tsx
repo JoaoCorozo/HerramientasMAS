@@ -170,14 +170,51 @@ export default function TranselecMatrizPage() {
           {preview && (
             <div className="mt-6 space-y-4">
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
-                <strong>{preview.total}</strong> filas válidas · Grupo: <strong>{preview.nombre_grupo}</strong>
+                <strong>{preview.total}</strong> filas válidas · Grupo:{" "}
+                <strong>{preview.nombre_grupo}</strong>
+                {((w?.omitidos_duplicado?.length ?? 0) + (w?.omitidos_sin_x?.length ?? 0)) > 0 && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · Excluidas:{" "}
+                    {(w?.omitidos_duplicado?.length ?? 0) + (w?.omitidos_sin_x?.length ?? 0)}
+                  </span>
+                )}
               </div>
 
               {(w?.emails_invalidos?.length ?? 0) > 0 && (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
                   <p className="font-semibold">Correos inválidos ({w!.emails_invalidos.length}) — se generará igual</p>
-                  <ul className="mt-2 max-h-32 overflow-auto text-xs">
-                    {w!.emails_invalidos.slice(0, 10).map((x, i) => (
+                  <ul className="mt-2 max-h-32 overflow-auto text-xs space-y-1">
+                    {w!.emails_invalidos.map((x, i) => (
+                      <li key={i}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(w?.omitidos_duplicado?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                  <p className="font-semibold">
+                    Excluidos por RUT duplicado ({w!.omitidos_duplicado.length})
+                  </p>
+                  <p className="mt-1 text-xs opacity-90">
+                    Solo se mantiene la primera aparición de cada RUT. Revisa si el RUT del omitido está mal cargado.
+                  </p>
+                  <ul className="mt-2 max-h-40 overflow-auto text-xs space-y-1">
+                    {w!.omitidos_duplicado.map((x, i) => (
+                      <li key={i}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(w?.omitidos_sin_x?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
+                  <p className="font-semibold">
+                    Excluidos sin marca X ({w!.omitidos_sin_x.length})
+                  </p>
+                  <ul className="mt-2 max-h-32 overflow-auto text-xs space-y-1">
+                    {w!.omitidos_sin_x.map((x, i) => (
                       <li key={i}>{x}</li>
                     ))}
                   </ul>

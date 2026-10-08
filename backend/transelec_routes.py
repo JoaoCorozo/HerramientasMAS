@@ -44,7 +44,7 @@ class GenerarAltaBody(BaseModel):
     rut: str
     firstname: str
     lastname: str
-    grupo: str
+    grupo: str = ""  # legacy; ya no se usa en el CSV
     forzar_email_no_transelec: bool = False
 
 
@@ -174,16 +174,10 @@ def api_altas_generar(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_permission("generador")),
 ):
-    ensure_transelec_seeded(db)
-    cat = get_catalog(db)
     if not body.rut.strip() or not body.firstname.strip():
         raise HTTPException(status_code=400, detail="RUT y firstname son obligatorios.")
     if not body.email.strip():
         raise HTTPException(status_code=400, detail="Correo obligatorio.")
-    if not body.grupo.strip():
-        raise HTTPException(status_code=400, detail="Selecciona un grupo.")
-    if not cat["cursos"]:
-        raise HTTPException(status_code=400, detail="No hay cursos en el catálogo.")
     email = body.email.strip().lower()
     if not email.endswith("@transelec.cl") and not body.forzar_email_no_transelec:
         raise HTTPException(
@@ -196,7 +190,7 @@ def api_altas_generar(
         "firstname": body.firstname,
         "lastname": body.lastname,
     }
-    content, filename = generar_csv_alta_bytes(datos, cat["cursos"], body.grupo.strip())
+    content, filename = generar_csv_alta_bytes(datos)
     return Response(
         content=content,
         media_type="text/csv",

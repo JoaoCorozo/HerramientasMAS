@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { BookOpen, Plus, Trash2, ExternalLink, Search, Clock, Calendar } from "lucide-react"
+import { BookOpen, Plus, Trash2, ExternalLink, Search, Clock, Calendar, Download } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 import { apiFetch } from "@/lib/api"
@@ -122,6 +122,38 @@ export default function CapacitacionesPage() {
     }
   }
 
+  const handleDownload = async () => {
+    if (!capacitaciones.length) {
+      alert("No hay capacitaciones para descargar.")
+      return
+    }
+    try {
+      const res = await apiFetch("/api/capacitaciones/export")
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(
+          typeof data.detail === "string" ? data.detail : "No se pudo descargar el listado."
+        )
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      const disp = res.headers.get("content-disposition")
+      let name = "Capacitaciones.xlsx"
+      if (disp?.includes("filename=")) {
+        name = disp.split("filename=")[1].replace(/"/g, "").trim()
+      }
+      a.download = name
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      a.remove()
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "No se pudo descargar el listado.")
+    }
+  }
+
   return (
     <div className="flex h-screen bg-background">
       <AppSidebar />
@@ -138,6 +170,15 @@ export default function CapacitacionesPage() {
               </h1>
             </div>
             
+            <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDownload}
+              disabled={!capacitaciones.length}
+            >
+              <Download className="mr-2 h-4 w-4" /> Descargar listado
+            </Button>
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-indigo-600 hover:bg-indigo-700">
@@ -177,6 +218,7 @@ export default function CapacitacionesPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            </div>
           </header>
 
           <div className="mb-6">

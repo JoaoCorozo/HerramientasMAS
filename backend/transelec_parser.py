@@ -12,8 +12,16 @@ from typing import Any
 import openpyxl
 
 EMAIL_TRANSELEC_REGEX = re.compile(r"[\w.+-]+@transelec\.cl", re.IGNORECASE)
+EMAIL_ANY_REGEX = re.compile(
+    r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
+    re.IGNORECASE,
+)
 EMAIL_GENERIC_REGEX = re.compile(
     r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+)
+# RUT chileno: 1.234.567-8 / 12345678-9 / 123456789
+RUT_REGEX = re.compile(
+    r"\b(\d{1,2}(?:\.\d{3}){2}-[\dkK]|\d{7,8}-[\dkK]|\d{7,8}[\dkK])\b"
 )
 PARTICULAS_APELLIDO = {"de", "del", "la", "las", "los", "y", "san", "santa", "von", "van"}
 
@@ -35,7 +43,64 @@ ETIQUETAS_ALTAS = {
     "jornada de trabajo": "Jornada de Trabajo",
 }
 
+# Alias → clave canónica (para pegados de correo/ticket con variantes)
+ALIAS_ETIQUETAS: dict[str, str] = {
+    "nombre": "nombre",
+    "nombres": "nombre",
+    "nombre completo": "nombre",
+    "nombre y apellido": "nombre",
+    "nombres y apellidos": "nombre",
+    "nombre trabajador": "nombre",
+    "nombre colaborador": "nombre",
+    "apellido": "apellido",
+    "apellidos": "apellido",
+    "rut": "rut",
+    "r.u.t": "rut",
+    "r.u.t.": "rut",
+    "run": "rut",
+    "cedula": "rut",
+    "cédula": "rut",
+    "documento": "rut",
+    "correo": "email",
+    "correo electronico": "email",
+    "correo electrónico": "email",
+    "email": "email",
+    "e-mail": "email",
+    "mail": "email",
+    "user": "email",
+    # "usuario" solo si el valor parece correo (ver _asignar_campo);
+    # "USUARIO Transelec ***" no debe pisar el email real.
+    "usuario": "email",
+    "cuenta": "email",
+    "area": "area",
+    "área": "area",
+    "cargo": "cargo",
+    "puesto": "cargo",
+    "fecha inicio contractual": "fecha inicio contractual",
+    "fecha de inicio": "fecha inicio contractual",
+    "fecha inicio": "fecha inicio contractual",
+    "fecha ingreso": "fecha inicio contractual",
+    "fecha de ingreso": "fecha inicio contractual",
+    "centro de costo- oi": "centro de costo- oi",
+    "centro de costo": "centro de costo- oi",
+    "centro de costo oi": "centro de costo- oi",
+    "tipo de contrato": "tipo de contrato",
+    "ubicacion": "ubicacion",
+    "ubicación": "ubicacion",
+    "requerimientos tecnologicos": "requerimientos tecnologicos",
+    "requerimientos tecnológicos": "requerimientos tecnologicos",
+    "elementos de proteccion personal": "elementos de proteccion personal",
+    "elementos de protección personal": "elementos de proteccion personal",
+    "jefatura directa": "jefatura directa",
+    "jefe": "jefatura directa",
+    "jornada de trabajo": "jornada de trabajo",
+    "jornada": "jornada de trabajo",
+}
+
 ETIQUETAS_OBLIGATORIAS = {"nombre", "rut"}
+
+_SEP_MISMA_LINEA = re.compile(r"\s*[:;=\|\t]\s*")
+_SOLO_ETIQUETA = re.compile(r"^[\wÁÉÍÓÚáéíóúÑñ ./\-]{2,60}$")
 
 
 def limpiar_rut(rut_raw: str) -> str:
@@ -126,8 +191,45 @@ def leer_lineas_archivo(ruta: Path | str) -> list[str]:
 
 
 def extraer_email(texto: str) -> str:
-    coincidencia = EMAIL_TRANSELEC_REGEX.search(texto)
-    return coincidencia.group(0).lower() if coincidencia else ""
+    """Prioriza @transelec.cl; si no hay, el primer correo válido del texto."""
+    coincidencia = EMAIL_TRANSELEC_REGEX.search(texto or "")
+    if coincidencia:
+        return coincidencia.group(0).lower()
+    generico = EMAIL_ANY_REGEX.search(texto or "")
+    return generico.group(0).lower() if generico else ""
+
+
+def extraer_rut_texto(texto: str) -> str:
+    coincidencia = RUT_REGEX.search(texto or "")
+    return coincidencia.group(1) if coincidencia else ""
+
+
+def _normalizar_clave_etiqueta(texto: str) -> str:
+    limpia = (
+        str(texto or "")
+        .strip()
+        .lower()
+        .replace("\xa0", " ")
+        .replace("_", " ")
+    )
+    limpia = re.sub(r"\s+", " ", limpia)
+    limpia = limpia.rstrip(":.;")
+    return limpia
+
+
+def _resolver_etiqueta(texto: str) -> str | None:
+    limpia = _normalizar_clave_etiqueta(texto)
+    if not limpia:
+        return None
+    if limpia in ALIAS_ETIQUETAS:
+        return ALIAS_ETIQUETAS[limpia]
+    # Quitar artículos iniciales (“el rut”, “el nombre”)
+    for prefijo in ("el ", "la ", "los ", "las "):
+        if limpia.startswith(prefijo):
+            cand = limpia[len(prefijo) :]
+            if cand in ALIAS_ETIQUETAS:
+                return ALIAS_ETIQUETAS[cand]
+    return None
 
 
 def extraer_campo_etiqueta_lineas(lineas: list[str], etiqueta: str) -> str:
@@ -142,60 +244,231 @@ def extraer_campo_etiqueta_lineas(lineas: list[str], etiqueta: str) -> str:
 
 
 def _normalizar_etiqueta_linea(linea: str) -> str | None:
-    limpia = linea.strip().rstrip(":").lower()
-    if limpia in ETIQUETAS_ALTAS:
-        return limpia
-    if limpia == "rut":
-        return "rut"
-    return None
+    """Compat: etiqueta sola en la línea (sin valor)."""
+    return _resolver_etiqueta(linea)
+
+
+def _partir_etiqueta_valor(linea: str) -> tuple[str | None, str]:
+    """Detecta 'Etiqueta: valor', 'Etiqueta;valor', 'Etiqueta = valor', tab, etc."""
+    linea = linea.strip()
+    if not linea:
+        return None, ""
+
+    # Separadores explícitos
+    for sep in (";", ":", "=", "|", "\t"):
+        if sep in linea:
+            izquierda, _, derecha = linea.partition(sep)
+            key = _resolver_etiqueta(izquierda)
+            if key and derecha.strip():
+                return key, derecha.strip()
+            # Si la izquierda es etiqueta pero el valor viene vacío, se trata en el bucle
+            if key and not derecha.strip():
+                return key, ""
+
+    # "Nombre Juan Pérez" (etiqueta + valor sin separador) solo si la 1ª palabra es alias corto
+    partes = linea.split(None, 1)
+    if len(partes) == 2:
+        key = _resolver_etiqueta(partes[0])
+        if key and key in ("nombre", "rut", "email", "cargo", "area"):
+            # Evitar falsos positivos tipo "Nombre de la empresa XYZ..."
+            if key == "nombre" and partes[1].lower().startswith(("de la ", "de el ", "del ")):
+                pass
+            elif key == "email" and "@" not in partes[1]:
+                # "USUARIO Transelec ***" no es un correo
+                pass
+            else:
+                return key, partes[1].strip()
+
+    # Línea que es solo etiqueta
+    if _SOLO_ETIQUETA.match(linea) and _resolver_etiqueta(linea):
+        return _resolver_etiqueta(linea), ""
+
+    return None, ""
+
+
+def _limpiar_valor_campo(key: str, valor: str) -> str:
+    valor = valor.strip().strip('"').strip("'")
+    valor = re.sub(r"\s+", " ", valor)
+    # Cortar coletillas típicas al pegar un párrafo
+    valor = re.split(
+        r"(?i)\b(?:gracias|saludos|atte|atentamente|favor(?:\s+crear)?)\b",
+        valor,
+        maxsplit=1,
+    )[0].strip(" .,-;")
+    if key == "email":
+        mail = extraer_email(valor)
+        # Rechazar valores tipo "Transelec ***" que no son correo
+        return mail
+    if key == "rut":
+        encontrado = extraer_rut_texto(valor)
+        return encontrado or valor
+    return valor
+
+
+def _es_email_usable(valor: str) -> bool:
+    v = (valor or "").strip().lower()
+    return bool(v) and "@" in v and EMAIL_ANY_REGEX.fullmatch(v) is not None
+
+
+def _asignar_campo(campos: dict[str, str], key: str, valor: str) -> None:
+    limpio = _limpiar_valor_campo(key, valor)
+    if not limpio:
+        return
+    if key == "email":
+        if not _es_email_usable(limpio):
+            return
+        # No pisar un @transelec.cl ya detectado con otro correo genérico
+        actual = campos.get("email", "")
+        if actual.endswith("@transelec.cl") and not limpio.endswith("@transelec.cl"):
+            return
+        campos["email"] = limpio
+        return
+    # Primera asignación gana salvo que el nuevo aporte más información
+    if key not in campos or not campos[key]:
+        campos[key] = limpio
+    elif key == "nombre" and len(limpio) > len(campos[key]):
+        campos[key] = limpio
+
+
+def _parece_ruido_correo(linea: str) -> bool:
+    baja = linea.lower()
+    ruido = (
+        "de:",
+        "from:",
+        "enviado:",
+        "sent:",
+        "para:",
+        "to:",
+        "cc:",
+        "asunto:",
+        "subject:",
+        "-----original",
+        "confidential",
+        "http://",
+        "https://",
+    )
+    return any(baja.startswith(r) or r in baja[:40] for r in ruido[:8]) or any(
+        r in baja for r in ruido[8:]
+    )
+
+
+def _preprocesar_lineas_pegado(lineas: list[str]) -> list[str]:
+    """Separa etiquetas pegadas en el mismo párrafo (común al copiar desde correo)."""
+    alias_pat = "|".join(
+        re.escape(a) for a in sorted(ALIAS_ETIQUETAS.keys(), key=len, reverse=True)
+    )
+    splitter = re.compile(
+        rf"(?i)(?<![A-Za-zÁÉÍÓÚáéíóúÑñ])({alias_pat})\s*([:;=\|\t])\s*"
+    )
+    out: list[str] = []
+    for linea in lineas:
+        if not linea.strip():
+            out.append(linea)
+            continue
+        # Insertar saltos antes de cada "Etiqueta:" dentro de la línea
+        partes = splitter.split(linea)
+        if len(partes) == 1:
+            out.append(linea)
+            continue
+        # split → [antes, etiqueta, sep, valor, etiqueta, sep, valor, ...]
+        if partes[0].strip():
+            out.append(partes[0].strip())
+        i = 1
+        while i + 2 < len(partes):
+            etiqueta, sep, resto = partes[i], partes[i + 1], partes[i + 2]
+            # resto puede incluir texto hasta la siguiente etiqueta (ya cortado por split)
+            out.append(f"{etiqueta}{sep} {resto.strip()}")
+            i += 3
+        if i < len(partes) and str(partes[i]).strip():
+            out.append(str(partes[i]).strip())
+    return out
 
 
 def extraer_campos_desde_lineas(lineas: list[str]) -> dict[str, str]:
     campos: dict[str, str] = {}
-    texto_completo = "\n".join(lineas)
-    campos["email"] = extraer_email(texto_completo)
+    # Normalizar espacios raros de Outlook / Word
+    lineas_norm = [
+        str(ln).replace("\xa0", " ").replace("\u200b", "").strip()
+        for ln in lineas
+    ]
+    lineas_norm = _preprocesar_lineas_pegado(lineas_norm)
+    texto_completo = "\n".join(lineas_norm)
+    email_global = extraer_email(texto_completo)
+    if email_global:
+        campos["email"] = email_global
 
     i = 0
-    while i < len(lineas):
-        linea = lineas[i].strip()
+    while i < len(lineas_norm):
+        linea = lineas_norm[i]
         if not linea:
             i += 1
             continue
 
-        if ";" in linea:
-            clave, _, valor = linea.partition(";")
-            key = _normalizar_etiqueta_linea(clave.strip())
-            if key and valor.strip():
-                campos[key] = valor.strip()
-            i += 1
-            continue
-
-        key = _normalizar_etiqueta_linea(linea)
+        key, valor = _partir_etiqueta_valor(linea)
         if key:
-            valores = []
+            if valor:
+                _asignar_campo(campos, key, valor)
+                i += 1
+                continue
+
+            # Etiqueta sola → tomar siguientes líneas hasta la próxima etiqueta
+            valores: list[str] = []
             j = i + 1
-            while j < len(lineas):
-                siguiente = lineas[j].strip()
+            while j < len(lineas_norm):
+                siguiente = lineas_norm[j]
                 if not siguiente:
+                    if valores:
+                        break
                     j += 1
                     continue
-                if _normalizar_etiqueta_linea(siguiente) is not None:
+                if _parece_ruido_correo(siguiente):
                     break
-                if EMAIL_TRANSELEC_REGEX.search(siguiente) and key != "email":
+                next_key, next_val = _partir_etiqueta_valor(siguiente)
+                if next_key is not None:
+                    # Si la siguiente línea ya trae etiqueta+valor, no la consumimos aquí
                     break
+                if EMAIL_ANY_REGEX.fullmatch(siguiente) and key != "email":
+                    break
+                if key != "rut" and RUT_REGEX.fullmatch(siguiente.replace(" ", "")):
+                    # RUT suelto: si buscábamos nombre, no lo mezclar
+                    if key == "nombre":
+                        break
                 valores.append(siguiente)
                 j += 1
+                # Nombre/RUT suelen ser una sola línea de valor
+                if key in ("nombre", "rut", "email", "apellido"):
+                    break
             if valores:
-                campos[key] = " ".join(valores)
+                _asignar_campo(campos, key, " ".join(valores))
             i = j
             continue
 
         i += 1
 
-    if "nombre" not in campos:
-        campos["nombre"] = extraer_campo_etiqueta_lineas(lineas, "Nombre")
-    if "rut" not in campos:
-        campos["rut"] = extraer_campo_etiqueta_lineas(lineas, "Rut")
+    # Fallbacks si faltan campos clave
+    if not campos.get("nombre"):
+        campos["nombre"] = extraer_campo_etiqueta_lineas(lineas_norm, "Nombre")
+    if not campos.get("nombre"):
+        m = re.search(
+            r"(?i)\b(?:nombre(?:\s+completo)?|nombres(?:\s+y\s+apellidos)?)\s*[:\-–]\s*([^\n\r|;]+)",
+            texto_completo,
+        )
+        if m:
+            campos["nombre"] = m.group(1).strip()
+    if not campos.get("rut"):
+        campos["rut"] = extraer_campo_etiqueta_lineas(lineas_norm, "Rut") or extraer_rut_texto(
+            texto_completo
+        )
+    # Siempre preferir un correo real del texto completo si el campo quedó inválido
+    if not _es_email_usable(campos.get("email", "")):
+        campos["email"] = extraer_email(texto_completo)
+    elif email_global and email_global.endswith("@transelec.cl"):
+        campos["email"] = email_global
+
+    # Unir apellido suelto al nombre si vino separado
+    if campos.get("apellido") and campos.get("nombre"):
+        if campos["apellido"].lower() not in campos["nombre"].lower():
+            campos["nombre"] = f"{campos['nombre']} {campos['apellido']}".strip()
 
     return campos
 
@@ -206,7 +479,9 @@ def parsear_solicitud_altas(
     ruta_archivo: Path | str | None = None,
 ) -> dict[str, Any]:
     if texto:
-        lineas = [ln.rstrip("\r") for ln in texto.replace("\r\n", "\n").split("\n")]
+        # Unificar saltos y líneas “pegadas” por soft-breaks de correo
+        crudo = texto.replace("\r\n", "\n").replace("\r", "\n")
+        lineas = [ln.rstrip() for ln in crudo.split("\n")]
     elif ruta_archivo:
         lineas = leer_lineas_archivo(ruta_archivo)
     else:
@@ -218,11 +493,13 @@ def parsear_solicitud_altas(
     email = campos.get("email", "").strip().lower()
     firstname, lastname = sugerir_nombre_apellido(nombre)
 
-    extras = {
-        ETIQUETAS_ALTAS[k]: v
-        for k, v in campos.items()
-        if k not in ("nombre", "rut", "email") and k in ETIQUETAS_ALTAS
-    }
+    extras = {}
+    for k, v in campos.items():
+        if k in ("nombre", "rut", "email", "apellido") or not v:
+            continue
+        label = ETIQUETAS_ALTAS.get(k)
+        if label:
+            extras[label] = v
 
     return {
         "email": email,
@@ -275,7 +552,7 @@ def procesar_matriz(ruta: Path | str) -> dict[str, Any]:
     nombre_grupo = f"Grupo {fecha_hoy}"
 
     filas_procesadas: list[dict[str, str]] = []
-    ruts_vistos: set[str] = set()
+    ruts_vistos: dict[str, str] = {}  # rut -> etiqueta primera aparición
     emails_invalidos: list[str] = []
     omitidos_sin_x: list[str] = []
     omitidos_duplicado: list[str] = []
@@ -322,17 +599,20 @@ def procesar_matriz(ruta: Path | str) -> dict[str, Any]:
             fila["course1"] = "Subestaciones"
             fila["group1"] = nombre_grupo
         else:
-            omitidos_sin_x.append(f"{rut_limpio} ({nombre_completo})")
+            omitidos_sin_x.append(f"{nombre_completo} ({rut_limpio})")
             continue
 
         if rut_limpio in ruts_vistos:
-            omitidos_duplicado.append(rut_limpio)
+            previo = ruts_vistos[rut_limpio]
+            omitidos_duplicado.append(
+                f"{nombre_completo} ({rut_limpio}) — RUT repetido; ya estaba: {previo}"
+            )
             continue
 
         if not es_email_valido_matriz(email):
-            emails_invalidos.append(f"{rut_limpio} ({nombre_completo}): {email or '(vacío)'}")
+            emails_invalidos.append(f"{nombre_completo} ({rut_limpio}): {email or '(vacío)'}")
 
-        ruts_vistos.add(rut_limpio)
+        ruts_vistos[rut_limpio] = f"{nombre_completo} / {email or 'sin correo'}"
         filas_procesadas.append(fila)
 
     cols_order = [
@@ -358,10 +638,10 @@ def procesar_matriz(ruta: Path | str) -> dict[str, Any]:
     }
 
 
-def construir_fila_alta(datos: dict[str, str], cursos: list[str], grupo: str) -> dict[str, str]:
+def construir_fila_alta(datos: dict[str, str]) -> dict[str, str]:
     rut_limpio = limpiar_rut(datos["rut"])
     email = datos["email"].strip().lower()
-    fila = {
+    return {
         "username": email,
         "password": rut_limpio,
         "address": rut_limpio,
@@ -373,10 +653,6 @@ def construir_fila_alta(datos: dict[str, str], cursos: list[str], grupo: str) ->
         "suspended": "0",
         "institution": "TRANSELEC",
     }
-    for i, curso in enumerate(cursos, start=1):
-        fila[f"course{i}"] = curso
-        fila[f"group{i}"] = grupo
-    return fila
 
 
 def csv_bytes_desde_filas(
@@ -397,13 +673,14 @@ def csv_bytes_desde_filas(
     return buf.getvalue().encode("utf-8-sig")
 
 
-def generar_csv_alta_bytes(datos: dict[str, str], cursos: list[str], grupo: str) -> tuple[bytes, str]:
-    fila = construir_fila_alta(datos, cursos, grupo)
+def generar_csv_alta_bytes(datos: dict[str, str]) -> tuple[bytes, str]:
+    """CSV de alta de usuario (sin columnas courseX / groupX)."""
+    fila = construir_fila_alta(datos)
     columnas_base = [
         "username", "password", "address", "firstname", "lastname",
         "auth", "idnumber", "email", "suspended", "institution",
     ]
-    content = csv_bytes_desde_filas([fila], columnas_base, len(cursos))
+    content = csv_bytes_desde_filas([fila], columnas_base, num_cursos=0)
     fecha_str = datetime.today().strftime("%d-%m-%y")
     filename = f"Script_altas - {fecha_str}.csv"
     return content, filename

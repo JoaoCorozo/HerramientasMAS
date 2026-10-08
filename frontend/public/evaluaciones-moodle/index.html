@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Evaluaciones para Moodle</title>
+    <link rel="stylesheet" type="text/css" href="assets/css/estilos.css" />
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.7.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  </head>
+  <body>
+    <div class="contenedor-principal">
+      <div class="contenedor-texto">
+        <h2 class="titulo-seccion">Preguntas de opción múltiple</h2>
+        <textarea
+          id="area-texto"
+          placeholder="Pega tu evaluación aquí"
+        ></textarea>
+
+        <div class="contenedor-enlace-manual">
+          <a
+            href="assets/documentos/Manual_de_Uso.pdf"
+            download="manual_de_uso.pdf"
+          >
+            Descargar Manual de Uso
+          </a>
+        </div>
+
+        <div class="contenedor-botones">
+          <input type="file" id="inputArchivo" style="display: none" />
+          <button id="botonCargarEvaluacion">Cargar Evaluación</button>
+          <button id="botonOrdenarTexto">Ordenar texto</button>
+          <button id="botonConvertir">Convertir</button>
+          <button id="botonNegrita">Convertir en Negrita</button>
+          <button id="botonBorrar" onclick="borrarContenido()">
+            Borrar Contenido
+          </button>
+          <div id="modalAlerta" class="modal">
+            <div class="modal-contenido">
+              <h2 class="modal-titulo">Textos Eliminados</h2>
+              <div id="modalTexto" class="modal-texto"></div>
+              <button id="modalCerrar" class="modal-boton">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="assets/js/alternativa_correcta.js"></script>
+    <script src="assets/js/opcion_multiple.js"></script>
+    <script src="assets/js/ordenar_texto.js"></script>
+  </body>
+</html>

@@ -372,6 +372,171 @@ export function convertirOpcionMultiple(
   return textoConvertido
 }
 
+export type PreguntaGift = {
+  enunciado: string
+  alternativas: { texto: string; correcta: boolean }[]
+}
+
+function unescapeGift(text: string): string {
+  const withoutTags = text.replace(/<\/?[^>]+>/g, "")
+  const textarea = typeof document !== "undefined" ? document.createElement("textarea") : null
+  let decoded = withoutTags
+  if (textarea) {
+    textarea.innerHTML = withoutTags
+    decoded = textarea.value
+  } else {
+    decoded = withoutTags
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+  }
+  return decoded
+    .replace(/\\:/g, ":")
+    .replace(/\\~/g, "~")
+    .replace(/\\=/g, "=")
+    .replace(/\\#/g, "#")
+    .replace(/\\\{/g, "{")
+    .replace(/\\\}/g, "}")
+    .replace(/\\\\/g, "\\")
+    .trim()
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+/** Parsea texto GIFT de Moodle (opción múltiple) al formato del módulo. */
+export function parseGift(texto: string): PreguntaGift[] {
+  let content = texto.replace(/\r\n|\r/g, "\n")
+  content = content.replace(/\\:\s*\{/g, "{")
+
+  const blockRe = /::([^:]+)::\s*(.*?)\s*\{(.*?)\}/gs
+  const preguntas: PreguntaGift[] = []
+  let match: RegExpExecArray | null
+
+  while ((match = blockRe.exec(content)) !== null) {
+    const enunciado = unescapeGift(match[2]).replace(/:+$/, "").trim()
+    const body = match[3]
+    const alternativas: PreguntaGift["alternativas"] = []
+
+    for (const rawLine of body.split("\n")) {
+      const line = rawLine.trim()
+      if (!line) continue
+      let correcta = false
+      let resto = line
+      if (resto.startsWith("=")) {
+        correcta = true
+        resto = resto.slice(1)
+      } else if (resto.startsWith("~")) {
+        resto = resto.slice(1)
+      } else {
+        continue
+      }
+      if (resto.includes("#")) {
+        resto = resto.split("#")[0]
+      }
+      const textoAlt = unescapeGift(resto)
+      if (textoAlt) alternativas.push({ texto: textoAlt, correcta })
+    }
+
+    if (enunciado && alternativas.length > 0) {
+      preguntas.push({ enunciado, alternativas })
+    }
+  }
+
+  return preguntas
+}
+
+function paragraphXml(
+  text: string,
+  opts: { bold?: boolean; yellowFill?: boolean; indent?: boolean } = {}
+): string {
+  const { bold = false, yellowFill = false, indent = false } = opts
+  const rPrParts: string[] = []
+  if (bold) rPrParts.push("<w:b/>")
+  if (yellowFill) {
+    rPrParts.push('<w:highlight w:val="yellow"/>')
+    rPrParts.push('<w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/>')
+  }
+  const rPr = rPrParts.length ? `<w:rPr>${rPrParts.join("")}</w:rPr>` : ""
+  const pPrParts: string[] = []
+  if (indent) {
+    pPrParts.push('<w:ind w:left="360"/>')
+  }
+  if (yellowFill) {
+    // Relleno de párrafo (fondo de la línea completa)
+    pPrParts.push('<w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/>')
+  }
+  const pPr = pPrParts.length ? `<w:pPr>${pPrParts.join("")}</w:pPr>` : ""
+  const escaped = escapeXml(text)
+  return `<w:p>${pPr}<w:r>${rPr}<w:t xml:space="preserve">${escaped}</w:t></w:r></w:p>`
+}
+
+/**
+ * Convierte GIFT → .docx (formato Evaluaciones Moodle).
+ * La alternativa correcta lleva `*` y relleno/resaltado amarillo.
+ */
+export async function giftToDocxBlob(textoGift: string): Promise<Blob> {
+  const preguntas = parseGift(textoGift)
+  if (preguntas.length === 0) {
+    throw new Error(
+      "No se encontraron preguntas en formato GIFT. Pega un .txt exportado de Moodle (::Pregunta:: … { =… ~… })."
+    )
+  }
+
+  const bodyParts: string[] = []
+  preguntas.forEach((p, i) => {
+    bodyParts.push(paragraphXml(`${i + 1}. ${p.enunciado}`, { bold: true }))
+    p.alternativas.forEach((alt, j) => {
+      const letra = String.fromCharCode(97 + j)
+      if (alt.correcta) {
+        bodyParts.push(
+          paragraphXml(`${letra}) *${alt.texto}`, { yellowFill: true, indent: true })
+        )
+      } else {
+        bodyParts.push(paragraphXml(`${letra}) ${alt.texto}`, { indent: true }))
+      }
+    })
+    bodyParts.push("<w:p/>")
+  })
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${bodyParts.join("\n    ")}
+    <w:sectPr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`
+
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`
+
+  const zip = new JSZip()
+  zip.file("[Content_Types].xml", contentTypes)
+  zip.folder("_rels")!.file(".rels", rels)
+  zip.folder("word")!.file("document.xml", documentXml)
+
+  return zip.generateAsync({ type: "blob" })
+}
+
 export async function marcarAlternativaCorrectaDocx(file: File): Promise<Blob> {
   const buffer = await file.arrayBuffer()
   const zip = await JSZip.loadAsync(buffer)

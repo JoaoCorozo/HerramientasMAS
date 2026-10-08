@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 import { apiFetch } from "@/lib/api"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 
 interface PreviewSummary {
   total_registros: number
@@ -21,6 +22,7 @@ export default function ConsultaCursosPage() {
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [loadingExcel, setLoadingExcel] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
+  const [modoExcel, setModoExcel] = useState<"multi" | "single">("multi")
 
   const handlePreview = async () => {
     if (!inputText.trim()) return
@@ -57,7 +59,7 @@ export default function ConsultaCursosPage() {
       const response = await apiFetch("/api/consulta-cursos/excel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto: inputText }),
+        body: JSON.stringify({ texto: inputText, modo_excel: modoExcel }),
       })
 
       if (!response.ok) {
@@ -108,7 +110,8 @@ export default function ConsultaCursosPage() {
                   Reporte Consulta Cursos
                 </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Pegue el resultado de la consulta Moodle y genere un Excel con una hoja por cada curso detectado.
+                  Pegue el resultado de la consulta Moodle y genere un Excel. Se excluyen filas con
+                  Inscrito = NO.
                 </p>
               </div>
             </div>
@@ -130,19 +133,47 @@ export default function ConsultaCursosPage() {
               className="min-h-[320px] w-full resize-y rounded-lg border border-input bg-background px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
 
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Button onClick={handlePreview} disabled={loadingPreview || !inputText.trim()}>
-                <Play className="mr-2 h-4 w-4" />
-                {loadingPreview ? "Analizando…" : "Vista previa"}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleDownload}
-                disabled={loadingExcel || !inputText.trim()}
-              >
-                <Download className="mr-2 h-4 w-4" />
-                {loadingExcel ? "Generando…" : "Descargar Excel"}
-              </Button>
+            <div className="mt-4 space-y-3">
+              <div>
+                <Label className="mb-2 block text-sm font-medium">Formato del Excel</Label>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="modoExcel"
+                      checked={modoExcel === "multi"}
+                      onChange={() => setModoExcel("multi")}
+                      className="accent-primary"
+                    />
+                    Varias hojas (una por curso)
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="modoExcel"
+                      checked={modoExcel === "single"}
+                      onChange={() => setModoExcel("single")}
+                      className="accent-primary"
+                    />
+                    Una sola hoja (todos los cursos)
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={handlePreview} disabled={loadingPreview || !inputText.trim()}>
+                  <Play className="mr-2 h-4 w-4" />
+                  {loadingPreview ? "Analizando…" : "Vista previa"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleDownload}
+                  disabled={loadingExcel || !inputText.trim()}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {loadingExcel ? "Generando…" : "Descargar Excel"}
+                </Button>
+              </div>
             </div>
 
             {errorMsg && (
@@ -154,7 +185,9 @@ export default function ConsultaCursosPage() {
 
           {preview && (
             <div className="rounded-xl border border-border bg-card p-6">
-              <h2 className="mb-4 text-lg font-medium text-card-foreground">Resumen detectado</h2>
+              <h2 className="mb-4 text-lg font-medium text-card-foreground">
+                Resumen detectado (solo Inscrito = SI)
+              </h2>
               <div className="mb-6 grid gap-4 sm:grid-cols-3">
                 <div className="rounded-lg bg-muted/50 px-4 py-3">
                   <p className="text-2xl font-semibold text-foreground">{preview.total_registros}</p>

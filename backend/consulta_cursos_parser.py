@@ -39,7 +39,11 @@ DATA_START_ROW = 5
 
 COURSE_RE = re.compile(r"^Curso:\s*(.+?)\s*\(ID\s*(\d+)\)\s*$", re.IGNORECASE)
 HEADER_PREFIX = "Usuario\tNombre\tApellido"
-USER_ID_RE = re.compile(r"^\d{7,10}$")
+# Moodle suele mandar RUT como 13870114k / 13870114-K / 17.088.338-1
+USER_ID_RE = re.compile(
+    r"^\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]$|^\d{7,8}-?[\dkK]$|^\d{7,10}$",
+    re.IGNORECASE,
+)
 
 DATA_COLUMNS = [
     "Usuario",
@@ -53,6 +57,12 @@ DATA_COLUMNS = [
     "Avance",
     "Fecha Inscripción/Baja",
     "Responsable",
+]
+
+SINGLE_SHEET_COLUMNS = [
+    "ID Curso",
+    "Curso",
+    *DATA_COLUMNS,
 ]
 
 @dataclass
@@ -153,6 +163,11 @@ def parse_consulta_text(text: str) -> list[ConsultaRow]:
             rows.append(parsed)
 
     return rows
+
+
+def filter_inscritos_si(rows: list[ConsultaRow]) -> list[ConsultaRow]:
+    """Conserva solo filas con Inscrito = SI."""
+    return [r for r in rows if _normalize_status(r.inscrito) == "si"]
 
 
 def summarize_rows(rows: list[ConsultaRow]) -> dict:
@@ -265,13 +280,25 @@ def _populate_styled_sheet(
     curso: str,
     course_rows: list[ConsultaRow],
     generated_at: datetime,
+    *,
+    title_override: str | None = None,
+    include_course_cols: bool = False,
 ) -> None:
-    num_cols = len(DATA_COLUMNS)
+    columns = SINGLE_SHEET_COLUMNS if include_course_cols else DATA_COLUMNS
+    num_cols = len(columns)
     last_col = get_column_letter(num_cols)
+    # Índices de columnas con estilo especial (1-based en la hoja)
+    col_estado = columns.index("Estado") + 1
+    col_inscrito = columns.index("Inscrito") + 1
+    col_avance = columns.index("Avance") + 1
+    col_cuenta = columns.index("Cuenta") + 1
+    wrap_cols = {columns.index("Correo") + 1, columns.index("Fecha Inscripción/Baja") + 1}
+    if include_course_cols:
+        wrap_cols.add(columns.index("Curso") + 1)
 
     ws.merge_cells(f"A1:{last_col}1")
     title_cell = ws["A1"]
-    title_cell.value = f"Reporte de Conectividad — {curso}"
+    title_cell.value = title_override or f"Reporte de Conectividad — {curso}"
     title_cell.font = Font(name="Calibri", size=14, bold=True, color=COLOR_HEADER_TEXT)
     title_cell.fill = _fill(COLOR_TITLE_BG)
     title_cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
@@ -279,11 +306,18 @@ def _populate_styled_sheet(
 
     ws.merge_cells(f"A2:{last_col}2")
     subtitle_cell = ws["A2"]
-    subtitle_cell.value = (
-        f"ID Curso: {curso_id}  |  "
-        f"Usuarios: {len(course_rows)}  |  "
-        f"Generado: {generated_at.strftime('%d/%m/%Y %H:%M')}"
-    )
+    if include_course_cols:
+        subtitle_cell.value = (
+            f"Cursos: {len({r.curso_id for r in course_rows})}  |  "
+            f"Registros: {len(course_rows)}  |  "
+            f"Generado: {generated_at.strftime('%d/%m/%Y %H:%M')}"
+        )
+    else:
+        subtitle_cell.value = (
+            f"ID Curso: {curso_id}  |  "
+            f"Usuarios: {len(course_rows)}  |  "
+            f"Generado: {generated_at.strftime('%d/%m/%Y %H:%M')}"
+        )
     subtitle_cell.font = Font(name="Calibri", size=10, italic=True, color="1F2937")
     subtitle_cell.fill = _fill(COLOR_SUBTITLE_TEXT)
     subtitle_cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
@@ -291,7 +325,7 @@ def _populate_styled_sheet(
 
     ws.row_dimensions[3].height = 6
 
-    for col_idx, header in enumerate(DATA_COLUMNS, start=1):
+    for col_idx, header in enumerate(columns, start=1):
         cell = ws.cell(row=HEADER_ROW, column=col_idx, value=header)
         cell.font = Font(name="Calibri", size=11, bold=True, color=COLOR_HEADER_TEXT)
         cell.fill = _fill(COLOR_HEADER_BG)
@@ -300,7 +334,10 @@ def _populate_styled_sheet(
 
     for row_offset, data_row in enumerate(course_rows):
         excel_row = DATA_START_ROW + row_offset
-        values = data_row.as_data_list()
+        if include_course_cols:
+            values = [data_row.curso_id, data_row.curso, *data_row.as_data_list()]
+        else:
+            values = data_row.as_data_list()
         row_fill = _fill(COLOR_ROW_ALT if row_offset % 2 else COLOR_ROW_WHITE)
 
         for col_idx, value in enumerate(values, start=1):
@@ -311,33 +348,37 @@ def _populate_styled_sheet(
             cell.alignment = Alignment(
                 horizontal="left",
                 vertical="center",
-                wrap_text=col_idx in {4, 10},
+                wrap_text=col_idx in wrap_cols,
             )
 
-        estado_cell = ws.cell(row=excel_row, column=COL_ESTADO)
+        estado_cell = ws.cell(row=excel_row, column=col_estado)
         estado_fill, estado_font = _estado_style(str(estado_cell.value or ""))
         estado_cell.fill = estado_fill
         estado_cell.font = estado_font
         estado_cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        inscrito_cell = ws.cell(row=excel_row, column=COL_INSCRITO)
+        inscrito_cell = ws.cell(row=excel_row, column=col_inscrito)
         inscrito_cell.fill = _yes_no_style(str(inscrito_cell.value or ""))
         inscrito_cell.alignment = Alignment(horizontal="center", vertical="center")
         inscrito_cell.font = Font(name="Calibri", size=10, bold=True, color="1F2937")
 
-        cuenta_cell = ws.cell(row=excel_row, column=COL_CUENTA)
+        cuenta_cell = ws.cell(row=excel_row, column=col_cuenta)
         if _normalize_status(str(cuenta_cell.value or "")) == "activa":
             cuenta_cell.fill = _fill(COLOR_INSCRITO_SI)
         cuenta_cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        avance_cell = ws.cell(row=excel_row, column=COL_AVANCE)
+        avance_cell = ws.cell(row=excel_row, column=col_avance)
         avance_cell.fill = _avance_style(str(avance_cell.value or ""))
         avance_cell.alignment = Alignment(horizontal="center", vertical="center")
         avance_cell.font = Font(name="Calibri", size=10, bold=True, color="1F2937")
 
-        ws.cell(row=excel_row, column=1).alignment = Alignment(horizontal="center", vertical="center")
+        # Columna Usuario centrada
+        usuario_col = columns.index("Usuario") + 1
+        ws.cell(row=excel_row, column=usuario_col).alignment = Alignment(
+            horizontal="center", vertical="center"
+        )
 
-    for col_idx, header in enumerate(DATA_COLUMNS, start=1):
+    for col_idx, header in enumerate(columns, start=1):
         col = get_column_letter(col_idx)
         max_len = len(header)
         for row_idx in range(HEADER_ROW, DATA_START_ROW + len(course_rows)):
@@ -357,17 +398,36 @@ def _populate_styled_sheet(
     ws.print_title_rows = f"${HEADER_ROW}:${HEADER_ROW}"
 
 
-def build_excel_bytes(rows: list[ConsultaRow]) -> tuple[bytes, str]:
+def build_excel_bytes(
+    rows: list[ConsultaRow],
+    *,
+    modo_excel: str = "multi",
+) -> tuple[bytes, str]:
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
-    used_titles: set[str] = set()
     generated_at = datetime.now()
+    modo = (modo_excel or "multi").strip().lower()
+    if modo not in {"multi", "single"}:
+        modo = "multi"
 
-    for (curso_id, curso), course_rows in _group_rows_by_course(rows):
-        title = _unique_sheet_title(curso_id, curso, used_titles)
-        ws = wb.create_sheet(title=title)
-        _populate_styled_sheet(ws, curso_id, curso, course_rows, generated_at)
+    if modo == "single":
+        ws = wb.create_sheet(title="Consulta")
+        _populate_styled_sheet(
+            ws,
+            curso_id="",
+            curso="",
+            course_rows=rows,
+            generated_at=generated_at,
+            title_override="Reporte de Conectividad — Todos los cursos",
+            include_course_cols=True,
+        )
+    else:
+        used_titles: set[str] = set()
+        for (curso_id, curso), course_rows in _group_rows_by_course(rows):
+            title = _unique_sheet_title(curso_id, curso, used_titles)
+            ws = wb.create_sheet(title=title)
+            _populate_styled_sheet(ws, curso_id, curso, course_rows, generated_at)
 
     filename = f"Consulta_Cursos_{generated_at.strftime('%Y%m%d_%H%M%S')}.xlsx"
     buffer = BytesIO()

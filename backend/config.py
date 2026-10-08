@@ -78,6 +78,8 @@ COOKIE_MAX_AGE = 60 * 60 * 24
 # True si el frontend llama al API por otro dominio (sin proxy Next.js)
 CROSS_SITE_AUTH = os.getenv("CROSS_SITE_AUTH", "").lower() in ("1", "true", "yes")
 COOKIE_SAMESITE = "none" if (IS_PRODUCTION and CROSS_SITE_AUTH) else "lax"
-COOKIE_SECURE = IS_PRODUCTION or CROSS_SITE_AUTH
+# Secure también si el frontend público es https (evita sesión rota con APP_ENV mal puesto)
+_public_https = PUBLIC_FRONTEND_URL.startswith("https://")
+COOKIE_SECURE = IS_PRODUCTION or CROSS_SITE_AUTH or _public_https
 
 APP_ENCRYPTION_KEY = os.getenv("APP_ENCRYPTION_KEY") or JWT_SECRET_KEY

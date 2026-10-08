@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+import io
 import json
 import os
 import csv
@@ -755,11 +756,33 @@ def normalizar_nombres(data: NombresInput, current_user: models.User = Depends(r
 
 
 # === REPORTE CONSULTA CURSOS (MOODLE) ===
-from consulta_cursos_parser import build_excel_bytes, parse_consulta_text, summarize_rows
+from consulta_cursos_parser import (
+    build_excel_bytes,
+    filter_inscritos_si,
+    parse_consulta_text,
+    summarize_rows,
+)
 
 
 class ConsultaCursosInput(BaseModel):
     texto: str
+    modo_excel: str = "multi"
+
+
+def _rows_consulta_filtrados(texto: str):
+    raw = parse_consulta_text(texto)
+    if not raw:
+        raise HTTPException(
+            status_code=400,
+            detail="No se encontraron registros. Verifique que el texto incluya líneas «Curso: … (ID …)» y filas con RUT.",
+        )
+    rows = filter_inscritos_si(raw)
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo había filas con Inscrito=NO. No hay registros para mostrar (se excluyen los no inscritos).",
+        )
+    return rows
 
 
 @app.post("/api/consulta-cursos/preview")
@@ -770,12 +793,7 @@ def preview_consulta_cursos(
     texto = (data.texto or "").strip()
     if not texto:
         raise HTTPException(status_code=400, detail="Pegue el resultado de la consulta Moodle.")
-    rows = parse_consulta_text(texto)
-    if not rows:
-        raise HTTPException(
-            status_code=400,
-            detail="No se encontraron registros. Verifique que el texto incluya líneas «Curso: … (ID …)» y filas con RUT.",
-        )
+    rows = _rows_consulta_filtrados(texto)
     summary = summarize_rows(rows)
     return {
         **summary,
@@ -791,14 +809,12 @@ def export_consulta_cursos_excel(
     texto = (data.texto or "").strip()
     if not texto:
         raise HTTPException(status_code=400, detail="Pegue el resultado de la consulta Moodle.")
-    rows = parse_consulta_text(texto)
-    if not rows:
-        raise HTTPException(
-            status_code=400,
-            detail="No se encontraron registros para exportar.",
-        )
+    rows = _rows_consulta_filtrados(texto)
+    modo = (data.modo_excel or "multi").strip().lower()
+    if modo not in {"multi", "single"}:
+        modo = "multi"
     try:
-        content, filename = build_excel_bytes(rows)
+        content, filename = build_excel_bytes(rows, modo_excel=modo)
         return StreamingResponse(
             iter([content]),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -984,6 +1000,69 @@ def save_db(db_name: str, username: str, data, db_session: Session):
         new_record = models.AppData(username=username, module_name=db_name, payload_json=payload)
         db_session.add(new_record)
     db_session.commit()
+
+def _capacitaciones_xlsx(items: list) -> bytes:
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Capacitaciones"
+    headers = ["Capacitación", "Enlace"]
+    header_fill = PatternFill("solid", fgColor="312E81")
+    header_font = Font(bold=True, color="FFFFFF")
+    for col, title in enumerate(headers, start=1):
+        cell = ws.cell(1, col, title)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(vertical="center")
+
+    link_font = Font(color="0563C1", underline="single")
+    row_idx = 2
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        nombre = str(item.get("title") or "").strip()
+        raw_url = str(item.get("url") or "").strip()
+        if not nombre and not raw_url:
+            continue
+        ws.cell(row_idx, 1, nombre or "Sin nombre")
+        link_cell = ws.cell(row_idx, 2, raw_url)
+        if raw_url:
+            href = raw_url if raw_url.lower().startswith(("http://", "https://")) else f"https://{raw_url}"
+            link_cell.hyperlink = href
+            link_cell.font = link_font
+        row_idx += 1
+
+    ws.column_dimensions["A"].width = 48
+    ws.column_dimensions["B"].width = 72
+    ws.auto_filter.ref = f"A1:B{max(row_idx - 1, 1)}"
+    ws.freeze_panes = "A2"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+@app.get("/api/capacitaciones/export")
+def export_capacitaciones(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "superadmin":
+        user_permissions = json.loads(current_user.permissions_json or "[]")
+        if "capacitaciones" not in user_permissions:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+    data = get_json_db("capacitaciones", current_user.username, db)
+    items = data if isinstance(data, list) else []
+    if not items:
+        raise HTTPException(status_code=400, detail="No hay capacitaciones para descargar.")
+    fecha = datetime.now().strftime("%Y-%m-%d")
+    filename = f"Capacitaciones_{fecha}.xlsx"
+    return Response(
+        content=_capacitaciones_xlsx(items),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
 
 @app.get("/api/db/{db_name}")
 def read_db(db_name: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):

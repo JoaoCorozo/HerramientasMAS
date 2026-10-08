@@ -1,7 +1,16 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { ClipboardList, FileDown, Eraser, Wand2, Bold, Upload, ListOrdered } from "lucide-react"
+import {
+  ClipboardList,
+  FileDown,
+  Eraser,
+  Wand2,
+  Bold,
+  Upload,
+  ListOrdered,
+  FileText,
+} from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
@@ -17,6 +26,7 @@ import {
   convertirOpcionMultiple,
   downloadBlob,
   downloadTextFile,
+  giftToDocxBlob,
   marcarAlternativaCorrectaDocx,
   ordenarTextoEvaluacion,
 } from "@/lib/evaluaciones-moodle"
@@ -24,6 +34,7 @@ import {
 export default function EvaluacionesMoodlePage() {
   const { user } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const giftFileInputRef = useRef<HTMLInputElement>(null)
   const [texto, setTexto] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -61,6 +72,21 @@ export default function EvaluacionesMoodlePage() {
     }
   }
 
+  const handleCargarGiftTxt = async (file: File | undefined) => {
+    if (!file) return
+    setBusy(true)
+    setError("")
+    try {
+      const content = await file.text()
+      setTexto(content)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo leer el archivo .txt")
+    } finally {
+      setBusy(false)
+      if (giftFileInputRef.current) giftFileInputRef.current.value = ""
+    }
+  }
+
   const handleOrdenar = () => {
     setError("")
     const result = ordenarTextoEvaluacion(texto)
@@ -81,6 +107,23 @@ export default function EvaluacionesMoodlePage() {
     downloadTextFile(convertido, "evaluacion_moodle.txt")
   }
 
+  const handleGiftAWord = async () => {
+    if (!texto.trim()) {
+      setError("Pega o carga un archivo GIFT (.txt de Moodle) antes de generar el Word.")
+      return
+    }
+    setBusy(true)
+    setError("")
+    try {
+      const blob = await giftToDocxBlob(texto)
+      downloadBlob(blob, "evaluacion_desde_gift.docx")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo generar el Word desde GIFT.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="flex h-screen bg-background">
       <AppSidebar />
@@ -92,7 +135,7 @@ export default function EvaluacionesMoodlePage() {
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold text-foreground">Evaluaciones Moodle</h1>
             <p className="text-sm text-muted-foreground">
-              Ordena, marca alternativas correctas y convierte preguntas al formato GIFT
+              Ordena, marca alternativas correctas, convierte a GIFT o regenera Word desde GIFT
             </p>
           </div>
           <a
@@ -112,7 +155,7 @@ export default function EvaluacionesMoodlePage() {
             <Textarea
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
-              placeholder="Pega tu evaluación aquí"
+              placeholder="Pega tu evaluación aquí (formato ordenado o GIFT de Moodle)"
               className="min-h-[420px] font-mono text-sm leading-relaxed"
             />
           </div>
@@ -130,6 +173,13 @@ export default function EvaluacionesMoodlePage() {
             className="hidden"
             onChange={(e) => handleCargarDocx(e.target.files?.[0])}
           />
+          <input
+            ref={giftFileInputRef}
+            type="file"
+            accept=".txt,text/plain"
+            className="hidden"
+            onChange={(e) => handleCargarGiftTxt(e.target.files?.[0])}
+          />
 
           <div className="flex flex-wrap gap-2">
             <Button
@@ -140,6 +190,16 @@ export default function EvaluacionesMoodlePage() {
             >
               <Upload className="h-4 w-4" />
               {busy ? "Procesando…" : "Cargar Evaluación"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => giftFileInputRef.current?.click()}
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Cargar GIFT (.txt)
             </Button>
             <Button type="button" variant="secondary" onClick={handleOrdenar} className="gap-2">
               <ListOrdered className="h-4 w-4" />
@@ -165,6 +225,15 @@ export default function EvaluacionesMoodlePage() {
             </Button>
             <Button
               type="button"
+              disabled={busy}
+              onClick={handleGiftAWord}
+              className="gap-2"
+            >
+              <FileDown className="h-4 w-4" />
+              GIFT → Word
+            </Button>
+            <Button
+              type="button"
               variant="outline"
               onClick={() => {
                 setTexto("")
@@ -175,11 +244,11 @@ export default function EvaluacionesMoodlePage() {
               <Eraser className="h-4 w-4" />
               Borrar Contenido
             </Button>
-            <Button type="button" variant="ghost" className="gap-2 pointer-events-none opacity-70">
-              <FileDown className="h-4 w-4" />
-              Salida: .txt / .docx
-            </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            <strong>GIFT → Word:</strong> convierte el texto GIFT de Moodle a .docx con la
+            alternativa correcta marcada con <code>*</code> y fondo amarillo.
+          </p>
         </div>
       </main>
 

@@ -157,10 +157,6 @@ export default function TranselecAltasPage() {
       setErrorMsg("Correo obligatorio.")
       return
     }
-    if (!grupo.trim()) {
-      setErrorMsg("Selecciona un grupo.")
-      return
-    }
     if (!email.endsWith("@transelec.cl") && !forzarEmail) {
       const ok = window.confirm(
         "El correo no es @transelec.cl y puede no funcionar en la plataforma. ¿Generar de todas formas?"
@@ -181,7 +177,6 @@ export default function TranselecAltasPage() {
           rut,
           firstname,
           lastname,
-          grupo,
           forzar_email_no_transelec: forzarEmail,
         }),
       })
@@ -207,7 +202,7 @@ export default function TranselecAltasPage() {
       a.click()
       window.URL.revokeObjectURL(url)
       a.remove()
-      setSuccessMsg(`CSV generado con ${cursos.length} cursos.`)
+      setSuccessMsg("CSV de alta generado (sin cursos ni grupos).")
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : "Error al generar.")
     } finally {
@@ -286,7 +281,7 @@ export default function TranselecAltasPage() {
                 </p>
                 <h1 className="text-2xl font-semibold text-foreground">Altas de usuarios nuevos</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Extrae datos de solicitudes por texto o archivo. Incluye todos los cursos del catálogo.
+                  Extrae datos de solicitudes por texto o archivo y genera el CSV de alta de usuario (sin cursos ni grupos).
                 </p>
               </div>
             </div>
@@ -304,7 +299,7 @@ export default function TranselecAltasPage() {
               <Textarea
                 id="solicitud"
                 className="mt-2 min-h-[220px] font-mono text-sm"
-                placeholder="Pega aquí el contenido con Nombre, Rut, correo @transelec.cl..."
+                placeholder={"Pega aquí la solicitud. Ejemplos:\nNombre: Ana Pérez\nRUT: 12.345.678-9\ncorreo@transelec.cl"}
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
               />
@@ -427,20 +422,6 @@ export default function TranselecAltasPage() {
                   <Label>Lastname</Label>
                   <Input value={lastname} onChange={(e) => setLastname(e.target.value)} />
                 </div>
-                <div>
-                  <Label>Grupo</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    value={grupo}
-                    onChange={(e) => setGrupo(e.target.value)}
-                  >
-                    {grupos.map((g) => (
-                      <option key={g} value={g}>
-                        {g}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
               {parsed?.campos_extra && Object.keys(parsed.campos_extra).length > 0 && (
@@ -458,7 +439,7 @@ export default function TranselecAltasPage() {
 
               <Button onClick={() => handleGenerar()} disabled={loading} className="gap-2">
                 <Play className="h-4 w-4" />
-                Generar CSV de alta ({cursos.length} cursos)
+                Generar CSV de alta
               </Button>
             </div>
           )}
