@@ -20,6 +20,7 @@ interface VideoItem {
   message?: string
   sourceLabel?: string
   resolution?: number
+  quality?: string
   zipName?: string
   output?: string
   lmsLabel?: string
@@ -92,6 +93,7 @@ export default function CompresorVideosPage() {
   const pollingRef = useRef<number | null>(null)
 
   const [resolution, setResolution] = useState(720)
+  const [quality, setQuality] = useState<"normal" | "compact">("normal")
   const [items, setItems] = useState<VideoItem[]>([])
   const [queueActive, setQueueActive] = useState(false)
   const [queueElapsedSeconds, setQueueElapsedSeconds] = useState(0)
@@ -313,7 +315,12 @@ export default function CompresorVideosPage() {
     try {
       const data = await requestJson("/api/compresor-video/start", {
         method: "POST",
-        body: JSON.stringify({ resolution, lms, courseId: courseId.trim() }),
+        body: JSON.stringify({
+          resolution: quality === "compact" ? 480 : resolution,
+          quality,
+          lms,
+          courseId: courseId.trim(),
+        }),
       })
       setModalOpen(false)
       applyItemsResponse(data)
@@ -393,23 +400,55 @@ export default function CompresorVideosPage() {
             </header>
 
             <section className="controls" aria-label="Controles de optimización">
-              <div className="control-group">
-                <label>Resolución</label>
-                <div className="segmented" role="group" aria-label="Resolución">
-                  <button
-                    className={`segment ${resolution === 720 ? "active" : ""}`}
-                    type="button"
-                    onClick={() => setResolution(720)}
-                  >
-                    720p
-                  </button>
-                  <button
-                    className={`segment ${resolution === 480 ? "active" : ""}`}
-                    type="button"
-                    onClick={() => setResolution(480)}
-                  >
-                    480p
-                  </button>
+              <div className="control-groups">
+                <div className="control-group">
+                  <label>Resolución</label>
+                  <div className="segmented" role="group" aria-label="Resolución">
+                    <button
+                      className={`segment ${resolution === 720 && quality === "normal" ? "active" : ""}`}
+                      type="button"
+                      disabled={quality === "compact"}
+                      onClick={() => setResolution(720)}
+                    >
+                      720p
+                    </button>
+                    <button
+                      className={`segment ${resolution === 480 || quality === "compact" ? "active" : ""}`}
+                      type="button"
+                      onClick={() => setResolution(480)}
+                    >
+                      480p
+                    </button>
+                  </div>
+                </div>
+
+                <div className="control-group">
+                  <label>Calidad</label>
+                  <div className="segmented" role="group" aria-label="Calidad">
+                    <button
+                      className={`segment ${quality === "normal" ? "active" : ""}`}
+                      type="button"
+                      onClick={() => setQuality("normal")}
+                    >
+                      Normal
+                    </button>
+                    <button
+                      className={`segment ${quality === "compact" ? "active" : ""}`}
+                      type="button"
+                      title="480p + mayor compresión. Ideal para videos de 1 hora o más (Moodle)."
+                      onClick={() => {
+                        setQuality("compact")
+                        setResolution(480)
+                      }}
+                    >
+                      Más compacto
+                    </button>
+                  </div>
+                  {quality === "compact" ? (
+                    <p className="control-hint">
+                      Usa 480p y más compresión para videos largos que Moodle no acepta por tamaño.
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
@@ -471,7 +510,8 @@ export default function CompresorVideosPage() {
                 <div>
                   <h2>Videos seleccionados</h2>
                   <p className="queue-help">
-                    Sube videos MP4, elige la resolución y genera el paquete final para el LMS.
+                    Sube videos MP4, elige resolución/calidad y genera el paquete final para el LMS.
+                    Para videos de más de ~1 hora usa &quot;Más compacto&quot;.
                   </p>
                 </div>
                 <span>{items.length} {items.length === 1 ? "archivo" : "archivos"}</span>
@@ -513,7 +553,9 @@ export default function CompresorVideosPage() {
                           </div>
                           <span className="source-pill">{item.sourceLabel || "Subido desde la web"}</span>
                           <div className="video-meta">
-                            {formatBytes(item.size)} - destino {item.resolution || resolution}p
+                            {formatBytes(item.size)} - destino{" "}
+                            {item.resolution || (quality === "compact" ? 480 : resolution)}p
+                            {(item.quality || quality) === "compact" ? " · más compacto" : ""}
                           </div>
                           <div className="video-meta">{item.message || "Pendiente."}</div>
                         </div>

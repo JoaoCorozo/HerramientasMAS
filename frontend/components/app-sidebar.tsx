@@ -16,6 +16,7 @@ import {
   Clapperboard,
   Shield,
   ClipboardList,
+  ChartColumn,
 } from "lucide-react"
 import { ThemeSettings } from "@/components/theme-settings"
 import { GeneradorNominaMenu } from "@/components/generador-nomina-menu"
@@ -40,6 +41,7 @@ const navItems: NavItem[] = [
   { icon: Users, label: "Usuarios Duplicados", href: "/usuarios-duplicados", moduleName: "usuarios_duplicados" },
   { icon: Clapperboard, label: "Compresor MP4", href: "/compresor-videos", moduleName: "compresor_video" },
   { icon: ClipboardList, label: "Evaluaciones Moodle", href: "/evaluaciones-moodle", moduleName: "evaluaciones_moodle" },
+  { icon: ChartColumn, label: "Análisis de Resultados", href: "/analisis-resultados", moduleName: "analisis_resultados" },
 ]
 
 function canAccessModule(

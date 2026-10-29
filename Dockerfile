@@ -1,3 +1,9 @@
+# Backend FastAPI — Plataforma Herramientas BEX
+# Build (desde la raíz del repo):
+#   docker build -t herramientas-bex-api .
+# Con compose (recomendado en empresa):
+#   docker compose up -d --build
+
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -10,8 +16,10 @@ COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend/ ./backend/
-COPY "cursos bex Moodle.xlsx" ./cursos bex Moodle.xlsx
-COPY "compresor_video/carpeta para el video" "./compresor_video/carpeta para el video"
+# Catálogo Moodle (obligatorio para el generador)
+COPY ["cursos bex Moodle.xlsx", "./cursos bex Moodle.xlsx"]
+# Plantilla del compresor de video
+COPY ["compresor_video/carpeta para el video", "./compresor_video/carpeta para el video"]
 
 RUN mkdir -p \
     compresor_video/input \
@@ -24,10 +32,10 @@ RUN mkdir -p \
 
 WORKDIR /app/backend
 
-ENV PYTHONUNBUFFERED=1
-ENV APP_ENV=production
-ENV MATRIZ_CURSOS_PATH=/app/cursos bex Moodle.xlsx
-ENV COMPRESOR_ROOT=/app/compresor_video
+ENV PYTHONUNBUFFERED=1 \
+    APP_ENV=production \
+    MATRIZ_CURSOS_PATH="/app/cursos bex Moodle.xlsx" \
+    COMPRESOR_ROOT=/app/compresor_video
 
 EXPOSE 8000
 

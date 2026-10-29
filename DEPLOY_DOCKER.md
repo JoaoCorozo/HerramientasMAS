@@ -1,21 +1,36 @@
-# Despliegue con Docker + MySQL
+# Despliegue con Docker + MySQL (servidor de empresa)
 
-Stack local/servidor:
+Stack en un solo servidor (on‑premise / VM):
 
-| Servicio   | Imagen / build      | Puerto por defecto |
+| Servicio   | Dockerfile / imagen | Puerto por defecto |
 |------------|---------------------|--------------------|
-| `frontend` | Next.js standalone  | 3000               |
-| `backend`  | FastAPI (uvicorn)   | 8000               |
-| `db`       | MySQL 8.4           | 3306               |
+| `frontend` | `frontend/Dockerfile` (Next.js standalone) | 3000 |
+| `backend`  | `Dockerfile` (raíz, FastAPI + FFmpeg) | 8000 |
+| `db`       | MySQL 8.4 | 3306 |
 
-El navegador entra por el **frontend** (`http://servidor:3000`). Las rutas `/api/*` se proxifican al backend dentro de la red Docker (`BACKEND_URL=http://backend:8000`).
+El navegador entra por el **frontend** (`http://servidor:3000` o tu dominio). Las rutas `/api/*` se proxifican al backend dentro de la red Docker (`BACKEND_URL=http://backend:8000`).
 
 > **Nota:** el Compresor MP4 corre **dentro del backend** (FFmpeg en la imagen + plantilla ZIP). Los videos de entrada/salida viven en volúmenes Docker (`compresor_input` / `compresor_output`). En la UI usa **Descargar ZIP** para bajar el paquete.
+
+## Arranque rápido (empresa)
+
+```bash
+# En la raíz del repo
+cp .env.docker.example .env
+# Editar .env: contraseñas, JWT, PUBLIC_FRONTEND_URL, CORS_ORIGINS
+
+docker compose up -d --build
+
+# Health
+curl http://localhost:8000/api/health
+# App: http://localhost:3000  (usuario admin + BOOTSTRAP_ADMIN_PASSWORD)
+```
 
 ## 1. Requisitos
 
 - Docker Engine + Docker Compose v2
-- Archivo `cursos bex Moodle.xlsx` en la raíz del repo (ya va en la imagen del backend)
+- Archivo `cursos bex Moodle.xlsx` en la raíz del repo (se copia a la imagen del backend)
+- Carpeta `compresor_video/carpeta para el video` (plantilla del compresor)
 
 ## 2. Configurar variables
 

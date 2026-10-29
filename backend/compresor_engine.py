@@ -208,12 +208,20 @@ def _read_ffmpeg_progress(progress_file: Path, duration: float, started: float) 
     return max(5, min(95, 5 + int(elapsed * 1.5)))
 
 
-def _unique_zip_path(input_path: Path, height: int, lms: str, course_id: str) -> Path:
+def _unique_zip_path(
+    input_path: Path,
+    height: int,
+    lms: str,
+    course_id: str,
+    *,
+    compact: bool = False,
+) -> Path:
     clean_name = _safe_slug(input_path.stem, "video")
     lms_info = _get_lms(lms)
     clean_lms = lms_info["slug"] if lms_info else _safe_slug(lms, "lms")
     clean_course = re.sub(r"[^0-9]", "", course_id or "")
-    stem = f"{clean_name}_{clean_lms}_curso_{clean_course}_{height}p"
+    suffix = f"{height}p_compacto" if compact else f"{height}p"
+    stem = f"{clean_name}_{clean_lms}_curso_{clean_course}_{suffix}"
     candidate = OUTPUT_DIR / f"{stem}.zip"
     counter = 2
     while candidate.exists():
@@ -304,6 +312,7 @@ class CompresorEngine:
             "finalSize": item.get("finalSize", 0),
             "reductionPercent": item.get("reductionPercent"),
             "resolution": item.get("resolution", 720),
+            "quality": item.get("quality") or "normal",
             "source": item.get("source"),
             "sourceLabel": item.get("sourceLabel"),
             "elapsedSeconds": item.get("elapsedSeconds", 0),
@@ -351,6 +360,7 @@ class CompresorEngine:
             "finalSize": 0,
             "reductionPercent": None,
             "resolution": 720,
+            "quality": "normal",
             "source": source,
             "sourceLabel": source_label,
             "lms": "",
@@ -492,9 +502,15 @@ class CompresorEngine:
 
     def start_queue(self, payload: dict) -> dict:
         with self._lock:
+            quality = str(payload.get("quality") or "normal").strip().lower()
+            if quality not in ("normal", "compact"):
+                quality = "normal"
             height = int(payload.get("resolution") or 720)
             if height not in (480, 720):
                 height = 720
+            # Videos largos: forzar 480p en modo compacto para caber en Moodle
+            if quality == "compact":
+                height = 480
             lms = str(payload.get("lms") or "").strip().lower()
             course_id = str(payload.get("courseId") or "").strip()
             lms_info = _get_lms(lms)
@@ -527,9 +543,12 @@ class CompresorEngine:
 
             for item in pending:
                 item["status"] = "queued"
-                item["message"] = "En cola."
+                item["message"] = (
+                    "En cola (modo más compacto)." if quality == "compact" else "En cola."
+                )
                 item["progress"] = 0
                 item["resolution"] = height
+                item["quality"] = quality
                 item["lms"] = lms_info["key"]
                 item["lmsLabel"] = lms_info["label"]
                 item["courseId"] = course_id
@@ -618,14 +637,22 @@ class CompresorEngine:
             return
 
         lms_info = _get_lms(item.get("lms") or "") or LMS_CATALOG["enaex_hispano"]
-        height = int(item.get("resolution") or 720)
+        quality = str(item.get("quality") or "normal").strip().lower()
+        compact = quality == "compact"
+        height = 480 if compact else int(item.get("resolution") or 720)
         input_path = Path(item["path"])
         item_id = item["id"]
         cancel_path = JOBS_DIR / f"{item_id}.cancel"
         progress_file = JOBS_DIR / f"{item_id}.progress"
         temp_output = PROCESSING_DIR / f"{item_id}.mp4"
         package_dir = PACKAGES_DIR / item_id
-        final_zip = _unique_zip_path(input_path, height, item.get("lms") or "", item.get("courseId") or "")
+        final_zip = _unique_zip_path(
+            input_path,
+            height,
+            item.get("lms") or "",
+            item.get("courseId") or "",
+            compact=compact,
+        )
 
         for p in (cancel_path, progress_file, temp_output):
             try:
@@ -640,7 +667,13 @@ class CompresorEngine:
         with self._lock:
             item["status"] = "running"
             item["progress"] = 5
-            item["message"] = "Procesando..."
+            item["resolution"] = height
+            item["quality"] = "compact" if compact else "normal"
+            item["message"] = (
+                "Procesando (más compacto, ideal para videos largos)…"
+                if compact
+                else "Procesando..."
+            )
             item["startedAt"] = _now_iso()
             item["finishedAt"] = ""
             item["cancelPath"] = str(cancel_path)
@@ -662,6 +695,14 @@ class CompresorEngine:
             f"scale='if(gt(ih,{height}),-2,trunc(iw/2)*2)':"
             f"'if(gt(ih,{height}),{height},trunc(ih/2)*2)'"
         )
+        # Normal: CRF 23 / veryfast. Compacto: 480p + CRF 28 + tope de bitrate (~1 Mb/s)
+        # para videos de 1h+ que Moodle no acepta a 500+ MB.
+        if compact:
+            v_preset, v_crf, a_bitrate = "medium", "28", "96k"
+            rate_args = ["-maxrate", "1000k", "-bufsize", "2000k"]
+        else:
+            v_preset, v_crf, a_bitrate = "veryfast", "23", "128k"
+            rate_args = []
         cmd = [
             str(ffmpeg),
             "-y",
@@ -678,9 +719,10 @@ class CompresorEngine:
             "-c:v",
             "libx264",
             "-preset",
-            "veryfast",
+            v_preset,
             "-crf",
-            "23",
+            v_crf,
+            *rate_args,
             "-threads",
             "0",
             "-pix_fmt",
@@ -688,7 +730,7 @@ class CompresorEngine:
             "-c:a",
             "aac",
             "-b:a",
-            "128k",
+            a_bitrate,
             "-movflags",
             "+faststart",
             str(temp_output),

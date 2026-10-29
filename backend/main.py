@@ -247,6 +247,7 @@ DEFAULT_ADMIN_PERMISSIONS = json.dumps([
     "comparador", "rut", "textos", "capacitaciones",
     "enlaces", "recordatorios", "generador", "consulta_cursos",
     "usuarios_duplicados", "compresor_video", "evaluaciones_moodle",
+    "analisis_resultados",
 ])
 
 
@@ -1609,6 +1610,8 @@ app.include_router(carozzi_router)
 app.include_router(emin_router)
 
 from compresor_routes import router as compresor_router
+from analisis_resultados_routes import router as analisis_resultados_router
 
 app.include_router(compresor_router)
+app.include_router(analisis_resultados_router)
 
