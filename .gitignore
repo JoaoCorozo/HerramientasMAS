@@ -22,6 +22,7 @@ deploy-vars.local.txt
 # Datos sensibles / PII
 backend/users.db
 backend/*.db
+backend/cookies.txt
 *.csv
 *.xlsx
 *.xls
@@ -29,6 +30,10 @@ backend/*.db
 !cursos bex Moodle.xls
 backend/Joao_*.json
 *_db.json
+respaldo_*.sql
+*.sql.dump
+test_sample_consulta.txt
+_zip_import/
 
 # Dependencias npm debug logs
 npm-debug.log*

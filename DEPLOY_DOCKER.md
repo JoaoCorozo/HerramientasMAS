@@ -112,6 +112,42 @@ docker compose down          # para contenedores (conserva datos MySQL)
 docker compose down -v       # ¡borra el volumen mysql_data!
 ```
 
-## 7. Migración desde SQLite / PostgreSQL
+## 7. Persistencia y migración de datos locales
+
+### Qué se conserva entre rebuilds
+
+| Volumen | Qué guarda |
+|---------|------------|
+| `mysql_data` | Toda la BD (usuarios, permisos, perfiles, capacitaciones, etc.) |
+| `compresor_input` / `compresor_output` / `compresor_temp` / `compresor_logs` | Archivos del compresor MP4 |
+
+- `docker compose up -d --build` → **mantiene** datos.
+- `docker compose down` → **mantiene** volúmenes.
+- `docker compose down -v` → **borra** MySQL y archivos del compresor.
+
+### Copiar datos del PC local (SQLite) al MySQL de Docker
+
+1. Asegura que exista `backend/users.db` (datos locales).
+2. `.env` en la raíz con `MYSQL_PASSWORD` (y resto) apuntando al MySQL publicado (`MYSQL_PORT`, por defecto 3306).
+3. Contenedores en marcha.
+4. En Windows: doble clic en `Sincronizar_Local_a_Docker.bat`  
+   o desde `backend/`: `py sync_sqlite_to_mysql.py`
+
+Eso limpia las tablas destino y copia usuarios, cursos Moodle, perfiles, etc.
+
+### Respaldar / restaurar MySQL (servidor empresa)
+
+```bash
+# Respaldo
+docker compose exec -T db mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --databases herramientas --single-transaction > respaldo_herramientas.sql
+
+# Restaurar (servidor nuevo con contenedores ya creados)
+docker compose exec -T db mysql -u root -p"$MYSQL_ROOT_PASSWORD" < respaldo_herramientas.sql
+docker compose restart backend
+```
+
+**No subas** `respaldo_herramientas.sql` ni `.env` a GitHub (datos y secretos).
+
+## 8. Migración desde PostgreSQL / otra nube
 
 Las tablas se crean solas al arrancar (`create_all`). Para copiar datos existentes usa los scripts `backend/sync_to_cloud.py` / exportación manual, o importa un dump SQL a MySQL.
