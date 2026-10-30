@@ -1,59 +1,172 @@
-# Paso a paso — Configuración Docker (equipo TI)
+# Paso a paso TI — Generar credenciales seguras (`.env`)
 
 Repo: https://github.com/MAS-Consultores/herramientas-lms  
-App: frontend Next.js + backend FastAPI + MySQL 8.4
+
+Esta guía indica **cómo generar** las credenciales de producción.  
+**No reutilizar** secretos de un PC de desarrollo. El archivo `.env` **no se sube a GitHub**.
 
 ---
 
-## Requisitos previos
+## Qué credenciales hay que generar
 
-- Servidor Linux o Windows con **Docker Engine + Docker Compose v2**
-- Acceso al repo `MAS-Consultores/herramientas-lms`
-- Puertos libres (o reasignables): **3000** (web), **8000** (API), **3306** (MySQL, solo si debe publicarse)
-- (Opcional) Proxy inverso Nginx/Caddy con HTTPS
+| Variable | Para qué sirve | Cómo debe ser |
+|----------|----------------|---------------|
+| `MYSQL_ROOT_PASSWORD` | Root del MySQL del contenedor | Contraseña aleatoria fuerte |
+| `MYSQL_PASSWORD` | Usuario de la app (`herramientas`) | Contraseña aleatoria fuerte **distinta** a la de root |
+| `JWT_SECRET_KEY` | Firma de sesiones / tokens | 64 caracteres hex (32 bytes) |
+| `APP_ENCRYPTION_KEY` | Cifrado de datos sensibles en BD | 64 caracteres hex (32 bytes), **distinta** al JWT |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Solo crea el primer usuario `admin` | Contraseña temporal fuerte; **eliminar del `.env` después del primer login** |
 
----
+Valores fijos (no son secretos; no hace falta “generarlos”):
 
-## Paso 1 — Clonar el repositorio
-
-```bash
-git clone https://github.com/MAS-Consultores/herramientas-lms.git
-cd herramientas-lms
+```env
+APP_ENV=production
+MYSQL_DATABASE=herramientas
+MYSQL_USER=herramientas
+MYSQL_PORT=3306
+ADMIN_MASTER_USER=admin
+FRONTEND_PORT=3000
+BACKEND_PORT=8000
+CROSS_SITE_AUTH=false
 ```
 
-Comprobar que existan:
+URL pública (definir según el servidor, no inventar secretos):
 
-- `cursos bex Moodle.xlsx` (raíz)
-- `compresor_video/carpeta para el video/`
-- `docker-compose.yml`, `Dockerfile`, `frontend/Dockerfile`
+```env
+PUBLIC_FRONTEND_URL=https://tu-dominio-o-ip
+CORS_ORIGINS=https://tu-dominio-o-ip
+```
+
+Usar la misma URL en ambas. Si aún no hay dominio: `http://IP-DEL-SERVIDOR:3000`.
 
 ---
 
-## Paso 2 — Crear el archivo `.env`
+## Paso 1 — Generar `JWT_SECRET_KEY` y `APP_ENCRYPTION_KEY`
+
+Ejecutar **dos veces** (un valor para JWT y otro para encryption). Deben ser **distintos**.
+
+### Linux / macOS / Git Bash / WSL
+
+```bash
+openssl rand -hex 32
+openssl rand -hex 32
+```
+
+Ejemplo de salida (no copies estos; genera los tuyos):
+
+```text
+a1b2c3d4e5f6...   → JWT_SECRET_KEY
+9f8e7d6c5b4a...   → APP_ENCRYPTION_KEY
+```
+
+### Windows PowerShell (sin OpenSSL)
+
+```powershell
+# JWT_SECRET_KEY
+-join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+
+# APP_ENCRYPTION_KEY (ejecutar de nuevo)
+-join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+```
+
+Alternativa criptográficamente más robusta en PowerShell:
+
+```powershell
+function New-HexSecret([int]$bytes = 32) {
+  $data = New-Object byte[] $bytes
+  [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($data)
+  ($data | ForEach-Object { $_.ToString('x2') }) -join ''
+}
+New-HexSecret   # JWT_SECRET_KEY
+New-HexSecret   # APP_ENCRYPTION_KEY
+```
+
+### Python (cualquier SO con Python)
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32)); print(secrets.token_hex(32))"
+```
+
+La primera línea → `JWT_SECRET_KEY`  
+La segunda → `APP_ENCRYPTION_KEY`
+
+---
+
+## Paso 2 — Generar contraseñas MySQL y admin
+
+Reglas:
+
+- Mínimo **20 caracteres**
+- Mezcla de mayúsculas, minúsculas y números
+- **Evitar** en lo posible: `@ : / # ? %` (pueden romper URLs de conexión)
+- `MYSQL_ROOT_PASSWORD` ≠ `MYSQL_PASSWORD` ≠ `BOOTSTRAP_ADMIN_PASSWORD`
+
+### Linux / Git Bash / WSL
+
+```bash
+# Root MySQL
+openssl rand -base64 24 | tr -d '/+=' | cut -c1-24
+
+# Usuario herramientas
+openssl rand -base64 24 | tr -d '/+=' | cut -c1-24
+
+# Admin temporal (bootstrap)
+openssl rand -base64 18 | tr -d '/+=' | cut -c1-20
+```
+
+### Windows PowerShell
+
+```powershell
+function New-AppPassword([int]$len = 24) {
+  $chars = (48..57 + 65..90 + 97..122) | ForEach-Object { [char]$_ }
+  -join ((1..$len) | ForEach-Object { $chars | Get-Random })
+}
+New-AppPassword 24   # MYSQL_ROOT_PASSWORD
+New-AppPassword 24   # MYSQL_PASSWORD
+New-AppPassword 20   # BOOTSTRAP_ADMIN_PASSWORD
+```
+
+### Python
+
+```bash
+python -c "import secrets,string; a=string.ascii_letters+string.digits; print(''.join(secrets.choice(a) for _ in range(24))); print(''.join(secrets.choice(a) for _ in range(24))); print(''.join(secrets.choice(a) for _ in range(20)))"
+```
+
+Orden de las tres líneas:
+
+1. `MYSQL_ROOT_PASSWORD`  
+2. `MYSQL_PASSWORD`  
+3. `BOOTSTRAP_ADMIN_PASSWORD`
+
+---
+
+## Paso 3 — Armar el `.env` con lo generado
+
+En el servidor, dentro del repo clonado:
 
 ```bash
 cp .env.docker.example .env
 ```
 
-Editar `.env` con valores de **producción** (no reutilizar secretos de un PC de desarrollo):
+Editar `.env` y dejarlo así (pegando **solo** los valores que generaron):
 
 ```env
 APP_ENV=production
 
-MYSQL_ROOT_PASSWORD=<contraseña_root_fuerte>
+MYSQL_ROOT_PASSWORD=<pegado_paso_2_1>
 MYSQL_DATABASE=herramientas
 MYSQL_USER=herramientas
-MYSQL_PASSWORD=<contraseña_mysql_fuerte>
+MYSQL_PASSWORD=<pegado_paso_2_2>
 MYSQL_PORT=3306
 
-JWT_SECRET_KEY=<openssl rand -hex 32>
-APP_ENCRYPTION_KEY=<openssl rand -hex 32>
+JWT_SECRET_KEY=<pegado_paso_1_jwt>
+APP_ENCRYPTION_KEY=<pegado_paso_1_encryption>
 
-BOOTSTRAP_ADMIN_PASSWORD=<clave_temporal_admin>
+BOOTSTRAP_ADMIN_PASSWORD=<pegado_paso_2_3>
 ADMIN_MASTER_USER=admin
 
-PUBLIC_FRONTEND_URL=https://herramientas.tudominio.cl
-CORS_ORIGINS=https://herramientas.tudominio.cl
+PUBLIC_FRONTEND_URL=https://tu-dominio-o-ip
+CORS_ORIGINS=https://tu-dominio-o-ip
 
 FRONTEND_PORT=3000
 BACKEND_PORT=8000
@@ -61,208 +174,73 @@ BACKEND_PORT=8000
 CROSS_SITE_AUTH=false
 ```
 
-### Notas para TI
+### Checklist de seguridad del `.env`
 
-| Variable | Regla |
-|----------|--------|
-| `PUBLIC_FRONTEND_URL` / `CORS_ORIGINS` | Misma URL pública con la que abrirán el navegador (con `https://` si hay certificado) |
-| `MYSQL_*_PASSWORD` | Preferir sin caracteres `@ : / # ?` |
-| `JWT_SECRET_KEY` / `APP_ENCRYPTION_KEY` | Aleatorios y distintos entre sí |
-| `BOOTSTRAP_ADMIN_PASSWORD` | Solo para crear el primer usuario `admin`; luego se elimina del `.env` |
-| `.env` | **No** se sube a GitHub |
+- [ ] JWT y Encryption son distintos  
+- [ ] Las 3 contraseñas (root, mysql, admin) son distintas  
+- [ ] Ningún valor es el de ejemplo (`cambia_*`, `AdminTemporal123!`)  
+- [ ] Ningún valor es el de un PC de desarrollo  
+- [ ] `.env` está solo en el servidor (permisos restringidos; no en Git)  
+- [ ] `PUBLIC_FRONTEND_URL` y `CORS_ORIGINS` coinciden con la URL real de acceso  
 
-Generar secretos (Linux):
+Permisos recomendados (Linux):
 
 ```bash
-openssl rand -hex 32
+chmod 600 .env
 ```
 
 ---
 
-## Paso 3 — Levantar la plataforma
+## Paso 4 — Guardar credenciales de forma segura
 
-```bash
-docker compose up -d --build
-```
-
-Esperar a que los contenedores estén healthy:
-
-```bash
-docker compose ps
-```
-
-Debe verse algo como:
-
-- `db` → healthy  
-- `backend` → healthy  
-- `frontend` → running  
+1. Guardar el `.env` (o un extracto) en el **gestor de secretos** de la empresa (Vault, 1Password, Bitwarden empresarial, ticket cifrado, etc.).
+2. Entregar al área funcional, por canal privado:
+   - URL de la app  
+   - Usuario: `admin`  
+   - Clave temporal: valor de `BOOTSTRAP_ADMIN_PASSWORD`  
+3. **No** enviar el `.env` completo por correo/Teams sin cifrado si la política lo prohíbe.
 
 ---
 
-## Paso 4 — Verificar
+## Paso 5 — Tras el primer arranque (obligatorio)
 
-```bash
-curl http://127.0.0.1:8000/api/health
-```
+Cuando la app ya esté arriba (`docker compose up -d --build`):
 
-Respuesta esperada (ejemplo):
-
-```json
-{"status":"ok","env":"production","database":"configured","database_dialect":"mysql",...}
-```
-
-Abrir en el navegador:
-
-- Directo: `http://IP-SERVIDOR:3000`
-- O el dominio configurado en el proxy
-
-Login inicial:
-
-- Usuario: `admin`
-- Clave: la de `BOOTSTRAP_ADMIN_PASSWORD`
-
----
-
-## Paso 5 — Seguridad post-arranque (obligatorio)
-
-1. Entrar como `admin` y **cambiar la contraseña**.
-2. Quitar o comentar `BOOTSTRAP_ADMIN_PASSWORD` en el `.env`.
-3. Recargar backend:
+1. Login con `admin` + `BOOTSTRAP_ADMIN_PASSWORD`.
+2. Cambiar la contraseña del admin desde la aplicación.
+3. **Eliminar o comentar** la línea `BOOTSTRAP_ADMIN_PASSWORD` del `.env`.
+4. Aplicar:
 
 ```bash
 docker compose up -d
 ```
 
-4. Crear usuarios reales y asignar permisos de módulos desde **Admin → Usuarios**.
+Así se cierra la clave temporal del bootstrap.
 
 ---
 
-## Paso 6 — Proxy HTTPS (recomendado)
+## Paso 6 — Rotación (si hubo filtración o salida de personal)
 
-Apuntar el dominio al **frontend** (puerto `FRONTEND_PORT`, por defecto 3000).
+Generar de nuevo con los pasos 1–2 y actualizar el `.env`:
 
-Ejemplo Nginx:
-
-```nginx
-server {
-  listen 443 ssl;
-  server_name herramientas.tudominio.cl;
-
-  # ssl_certificate ...;
-  # ssl_certificate_key ...;
-
-  client_max_body_size 500m;   # videos / Excels grandes
-
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-}
-```
-
-Luego alinear el `.env`:
-
-```env
-PUBLIC_FRONTEND_URL=https://herramientas.tudominio.cl
-CORS_ORIGINS=https://herramientas.tudominio.cl
-```
-
-```bash
-docker compose up -d
-```
-
-Con `CROSS_SITE_AUTH=false`, el login usa cookies same-site vía rutas `/api` del frontend (no hace falta exponer el 8000 a Internet).
+| Si rotas… | Efecto |
+|-----------|--------|
+| `JWT_SECRET_KEY` | Todos deben volver a iniciar sesión |
+| `APP_ENCRYPTION_KEY` | Puede invalidar datos cifrados con la clave anterior; coordinar con desarrollo |
+| `MYSQL_PASSWORD` / root | Actualizar `.env` y recrear/ajustar el servicio `db` según política Docker |
+| Contraseña de `admin` | Cambiarla en la UI (preferible) |
 
 ---
 
-## Paso 7 — Cargar datos existentes (si aplica)
+## Resumen rápido
 
-### Opción A — Dump MySQL entregado por el área funcional
-
-```bash
-# Contenedores ya arriba
-docker compose exec -T db mysql -u root -p"$MYSQL_ROOT_PASSWORD" < respaldo_herramientas.sql
-docker compose restart backend
+```text
+1. openssl rand -hex 32          → JWT_SECRET_KEY
+2. openssl rand -hex 32          → APP_ENCRYPTION_KEY  (otro valor)
+3. 3 contraseñas aleatorias      → MYSQL_ROOT, MYSQL_PASSWORD, BOOTSTRAP_ADMIN
+4. Pegar en .env + URL pública
+5. chmod 600 .env
+6. Tras primer login: quitar BOOTSTRAP_ADMIN_PASSWORD
 ```
 
-### Opción B — Migración desde SQLite local (`users.db`)
-
-1. Colocar `backend/users.db` en el servidor (copia segura).
-2. Asegurar `.env` con `MYSQL_PASSWORD` y MySQL publicado en `MYSQL_PORT`.
-3. Ejecutar:
-
-```bash
-cd backend
-pip install pymysql sqlalchemy python-dotenv   # si hace falta en el host
-py sync_sqlite_to_mysql.py                    # o: python sync_sqlite_to_mysql.py
-cd ..
-docker compose restart backend
-```
-
-En Windows del desarrollador también existe `Sincronizar_Local_a_Docker.bat`.
-
----
-
-## Paso 8 — Persistencia (importante)
-
-| Acción | ¿Se pierden datos? |
-|--------|--------------------|
-| `docker compose up -d --build` | No |
-| `docker compose down` | No (volúmenes intactos) |
-| `docker compose down -v` | **Sí** — borra MySQL y archivos del compresor |
-
-Volúmenes relevantes: `mysql_data`, `compresor_input`, `compresor_output`.
-
-Respaldo periódico:
-
-```bash
-docker compose exec -T db mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --databases herramientas --single-transaction > respaldo_herramientas.sql
-```
-
----
-
-## Paso 9 — Actualizar la aplicación (nuevas versiones)
-
-```bash
-cd herramientas-lms
-git pull
-docker compose up -d --build
-```
-
-Los datos en MySQL se mantienen.
-
----
-
-## Comandos útiles de soporte
-
-```bash
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose logs -f db
-docker compose restart backend
-docker compose ps
-```
-
----
-
-## Checklist final TI
-
-- [ ] Repo clonado  
-- [ ] `.env` creado (no en Git)  
-- [ ] `docker compose up -d --build` OK  
-- [ ] `/api/health` responde `mysql` + `ok`  
-- [ ] Login `admin` funciona  
-- [ ] Contraseña admin cambiada y `BOOTSTRAP_ADMIN_PASSWORD` quitado  
-- [ ] URL pública / CORS alineados  
-- [ ] (Opcional) HTTPS + `client_max_body_size` alto  
-- [ ] (Opcional) Datos migrados / dump restaurado  
-- [ ] Respaldo MySQL programado  
-
----
-
-## Contacto funcional
-
-Ante dudas de negocio/módulos (permisos, catálogo Moodle, compresor), coordinar con el área usuaria de la plataforma. Detalle técnico ampliado: `DEPLOY_DOCKER.md`.
+Arranque de la app y volúmenes: ver `DEPLOY_DOCKER.md`.
