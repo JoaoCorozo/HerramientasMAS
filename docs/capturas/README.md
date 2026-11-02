@@ -41,9 +41,14 @@ Variables opcionales: `CAPTURE_BASE_URL`, `CAPTURE_USER`, `CAPTURE_PASSWORD`.
 | `16-generador-paso2.png` | Generador paso 2 – hoja y columnas |
 | `17-generador-paso3.png` | Generador paso 3 – mapeo |
 | `18-generador-paso4.png` | Generador paso 4 – previsualización |
-| `19-admin-usuarios.png` | *(Opcional)* Administrar usuarios |
-| `20-permisos-usuario.png` | *(Opcional)* Permisos de módulos |
+| `19-admin-usuarios.png` | *(Admin)* Administrar usuarios |
+| `20-permisos-usuario.png` | *(Admin)* Permisos de módulos |
+| `21-consulta-cursos.png` | Reporte Consulta Cursos |
+| `22-usuarios-duplicados.png` | Usuarios Duplicados |
+| `23-compresor-videos.png` | Compresor MP4 |
+| `24-evaluaciones-moodle.png` | Evaluaciones Moodle |
+| `25-analisis-resultados.png` | Análisis de Resultados |
 
-El manual de usuario final usa las capturas 01–18. Las 19–20 son solo para documentación de administración.
+Las capturas 01–25 se incrustan en el Word que el usuario descarga desde la app (**Descargar manual**), solo en las secciones de los módulos a los que tiene permiso.
 
-Cuando existan, el manual mostrará las imágenes al exportar a PDF con `py docs/scripts/export_manual_pdf.py`.
+Cuando existan, el manual también puede exportarse a PDF con `py docs/scripts/export_manual_pdf.py`.

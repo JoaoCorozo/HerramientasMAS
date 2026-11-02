@@ -16,6 +16,8 @@ COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend/ ./backend/
+# Capturas del manual de usuario (DOCX filtrado por permisos)
+COPY docs/capturas/ ./docs/capturas/
 # Catálogo Moodle (obligatorio para el generador)
 COPY ["cursos bex Moodle.xlsx", "./cursos bex Moodle.xlsx"]
 # Plantilla del compresor de video
