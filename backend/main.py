@@ -1611,7 +1611,9 @@ app.include_router(emin_router)
 
 from compresor_routes import router as compresor_router
 from analisis_resultados_routes import router as analisis_resultados_router
+from manual_routes import router as manual_router
 
 app.include_router(compresor_router)
 app.include_router(analisis_resultados_router)
+app.include_router(manual_router)
 

@@ -390,13 +390,16 @@ Si no aparece, pide el cambio a un administrador.
 
 ---
 
+### Descarga desde la aplicación
+
+En el menú lateral, botón **Descargar manual**: genera un Word (`.docx`) **solo con los módulos a los que tu usuario tiene permiso**. No incluye guías de TI ni configuración de servidor.
+
 ### Documentos relacionados en el repositorio
 
 | Archivo | Público |
 |---------|---------|
-| `docs/MANUAL_USUARIO_PLATAFORMA_BEX.md` | Este manual (funcional) |
+| `docs/MANUAL_USUARIO_PLATAFORMA_BEX.md` | Referencia completa (desarrollo / documentación) |
+| Descarga in-app | Manual filtrado por permisos del usuario |
 | `docs/capturas/` | Imágenes referenciadas |
 | `PASO_A_PASO_TI.md` | Credenciales seguras para TI |
 | `DEPLOY_DOCKER.md` | Despliegue Docker |
-
-*Versión orientada a usuarios finales. Capturas de módulos antiguos se mantienen; módulos nuevos pueden documentarse con capturas adicionales cuando se actualice el PDF.*

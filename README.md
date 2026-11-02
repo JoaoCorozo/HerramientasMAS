@@ -64,8 +64,8 @@ docker compose exec -T db mysql -u root -p"$MYSQL_ROOT_PASSWORD" herramientas < 
 
 ## Manual de usuario
 
-Todas las funcionalidades de la aplicación (paso a paso):  
-[`docs/MANUAL_USUARIO_PLATAFORMA_BEX.md`](docs/MANUAL_USUARIO_PLATAFORMA_BEX.md)
+- **En la app:** menú lateral → **Descargar manual** (Word filtrado por los permisos del usuario).
+- **Referencia completa en el repo:** [`docs/MANUAL_USUARIO_PLATAFORMA_BEX.md`](docs/MANUAL_USUARIO_PLATAFORMA_BEX.md)
 
 ## Seguridad
 

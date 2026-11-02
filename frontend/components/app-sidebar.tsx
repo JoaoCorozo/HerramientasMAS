@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { ThemeSettings } from "@/components/theme-settings"
 import { GeneradorNominaMenu } from "@/components/generador-nomina-menu"
+import { ManualDownloadButton } from "@/components/manual-download-button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "./auth-provider"
 
@@ -155,6 +156,8 @@ export function AppSidebar() {
 
       <div className="space-y-1 border-t border-sidebar-border px-3 py-4">
         <ThemeSettings />
+
+        <ManualDownloadButton />
 
         <button
           onClick={logout}
