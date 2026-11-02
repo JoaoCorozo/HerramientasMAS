@@ -62,6 +62,11 @@ docker compose exec -T db mysql -u root -p"$MYSQL_ROOT_PASSWORD" herramientas < 
 - `cursos bex Moodle.xlsx` en la raíz (catálogo)
 - Carpeta `compresor_video/carpeta para el video` (plantilla ZIP)
 
+## Manual de usuario
+
+Todas las funcionalidades de la aplicación (paso a paso):  
+[`docs/MANUAL_USUARIO_PLATAFORMA_BEX.md`](docs/MANUAL_USUARIO_PLATAFORMA_BEX.md)
+
 ## Seguridad
 
 **No versionar:** `.env`, `backend/users.db`, `backend/cookies.txt`, dumps SQL con datos reales.
