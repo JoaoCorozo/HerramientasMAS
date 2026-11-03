@@ -15,7 +15,6 @@ backend/cookies.txt
 !.env.docker.example
 _zip_import
 agent-transcripts
-docs/capturas
 **/test_sample*
 **/*.md
 !DEPLOY_DOCKER.md
