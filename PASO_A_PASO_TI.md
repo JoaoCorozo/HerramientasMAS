@@ -165,14 +165,17 @@ APP_ENCRYPTION_KEY=<pegado_paso_1_encryption>
 BOOTSTRAP_ADMIN_PASSWORD=<pegado_paso_2_3>
 ADMIN_MASTER_USER=admin
 
-PUBLIC_FRONTEND_URL=https://tu-dominio-o-ip
-CORS_ORIGINS=https://tu-dominio-o-ip
+# Debe coincidir EXACTAMENTE con la URL del navegador (esquema + host + puerto)
+PUBLIC_FRONTEND_URL=http://IP-DEL-SERVIDOR:3001
+CORS_ORIGINS=http://IP-DEL-SERVIDOR:3001
 
-FRONTEND_PORT=3000
+FRONTEND_PORT=3001
 BACKEND_PORT=8000
 
 CROSS_SITE_AUTH=false
 ```
+
+> Si el login muestra **«Error obteniendo usuario»** (no «Credenciales incorrectas»), la clave está bien pero la cookie de sesión no se guarda. Causa típica: `APP_ENV=production` + acceso por **HTTP** mientras `PUBLIC_FRONTEND_URL` no es `http://...` o apunta a otro puerto. Corregir URL/CORS, actualizar código y `docker compose up -d --build backend`.
 
 ### Checklist de seguridad del `.env`
 
@@ -181,7 +184,7 @@ CROSS_SITE_AUTH=false
 - [ ] Ningún valor es el de ejemplo (`cambia_*`, `AdminTemporal123!`)  
 - [ ] Ningún valor es el de un PC de desarrollo  
 - [ ] `.env` está solo en el servidor (permisos restringidos; no en Git)  
-- [ ] `PUBLIC_FRONTEND_URL` y `CORS_ORIGINS` coinciden con la URL real de acceso  
+- [ ] `PUBLIC_FRONTEND_URL` y `CORS_ORIGINS` coinciden con la URL real de acceso (incluido el puerto)  
 
 Permisos recomendados (Linux):
 

@@ -42,8 +42,9 @@ Edita `.env` y define al menos:
 
 - `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD` (sin caracteres `@ : / # ?` si puedes evitarlos)
 - `JWT_SECRET_KEY` y `APP_ENCRYPTION_KEY` (p. ej. `openssl rand -hex 32`)
-- `PUBLIC_FRONTEND_URL` y `CORS_ORIGINS` con la URL real del servidor (`https://tu-dominio.com`)
+- `PUBLIC_FRONTEND_URL` y `CORS_ORIGINS` con la URL **exacta** de acceso (incluye puerto si no es 80/443). Ejemplo sin HTTPS: `http://IP:3001`
 - `BOOTSTRAP_ADMIN_PASSWORD` solo para el **primer** arranque
+- Si entran por **HTTP** (sin candado), `PUBLIC_FRONTEND_URL` debe empezar por `http://` para que la cookie de sesión funcione. Si ves «Error obteniendo usuario» tras login, suele ser cookie `Secure` con HTTP: corrige la URL pública y recrea el backend (`docker compose up -d --build backend`)
 
 ## 3. Levantar
 
