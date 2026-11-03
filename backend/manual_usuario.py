@@ -1,4 +1,4 @@
-"""Manual de usuario por módulos → DOCX filtrado por permisos (con capturas)."""
+"""Manual de usuario por módulos → DOCX filtrado por permisos (vista + proceso)."""
 from __future__ import annotations
 
 import io
@@ -66,25 +66,19 @@ INTRO_SECTIONS: list[dict[str, Any]] = [
     {
         "title": "Entrar a la plataforma",
         "body": [
-            "1. Abre el enlace que te entregaron.",
-            "2. Escribe tu usuario y contraseña.",
-            "3. Haz clic en Iniciar Sesión.",
-            "Si olvidaste la contraseña o no puedes entrar, contacta a tu administrador o a sistemas. No compartas tu clave.",
+            "Abre el enlace que te entregaron, escribe tu usuario y contraseña, y haz clic en Iniciar Sesión. Si no puedes entrar, contacta a tu administrador o a sistemas. No compartas tu clave.",
         ],
         "images": [
-            {"file": "01-login.png", "caption": "Pantalla de inicio de sesión"},
+            {"file": "01-login.png", "caption": "Vista: inicio de sesión"},
         ],
     },
     {
         "title": "Pantalla principal",
         "body": [
-            "A la izquierda está el menú Herramientas. La opción activa se resalta.",
-            "Abajo puedes cambiar la Apariencia (claro/oscuro y estilo visual). El navegador recordará tu preferencia.",
-            "También puedes Descargar manual (este documento) y Cerrar Sesión.",
+            "A la izquierda está el menú Herramientas: haz clic en la opción que necesites. Abajo puedes cambiar la Apariencia (claro/oscuro), descargar este manual y Cerrar Sesión.",
         ],
         "images": [
-            {"file": "02-menu-lateral.png", "caption": "Menú lateral con las herramientas disponibles"},
-            {"file": "03-apariencia.png", "caption": "Panel de apariencia (tema y estilo)"},
+            {"file": "02-menu-lateral.png", "caption": "Vista: menú lateral"},
         ],
     },
 ]
@@ -93,184 +87,122 @@ MODULE_MANUAL: dict[str, dict[str, Any]] = {
     "comparador": {
         "title": "Comparador de Datos",
         "body": [
-            "Compara dos archivos Excel y descarga un reporte con diferencias, coincidencias o ambos.",
-            "Pasos:",
-            "1. Sube el Archivo Principal (base) y el Archivo de Contraste.",
-            "2. Ajusta columnas, filas e hoja si es necesario.",
-            "3. Elige el tipo de reporte: Solo diferencias, Solo coincidencias o Ambos (2 hojas).",
-            "4. Haz clic en Comenzar comparación y descarga el Excel resultante.",
-            "Consejo: usa la misma columna clave en ambos archivos (por ejemplo RUT o código). La plataforma no modifica tus archivos originales.",
+            "Sirve para comparar dos archivos Excel y obtener un reporte con diferencias, coincidencias o ambos.",
+            "Proceso: sube el Archivo Principal (tu base) y el Archivo de Contraste. Ajusta hoja, columnas o filas solo si hace falta. Elige el tipo de reporte (solo diferencias, solo coincidencias o ambos) y haz clic en Comenzar comparación. Se descargará un Excel nuevo; tus archivos originales no se modifican. Usa la misma columna clave en ambos (por ejemplo RUT o código).",
         ],
         "images": [
-            {"file": "04-comparador-vista.png", "caption": "Vista del Comparador de Datos"},
-            {"file": "05-comparador-archivos.png", "caption": "Carga de los dos archivos Excel"},
-            {"file": "06-comparador-resultado.png", "caption": "Resultado / descarga del reporte"},
+            {"file": "04-comparador-vista.png", "caption": "Vista del módulo Comparador de Datos"},
         ],
     },
     "rut": {
         "title": "Normalizador RUT",
         "body": [
-            "Deja una lista de RUT chilenos con el mismo formato.",
-            "Pasos:",
-            "1. Pega un RUT por línea en el cuadro izquierdo.",
-            "2. Elige el formato (con o sin puntos y guión; K en minúscula si aplica).",
-            "3. Haz clic en Normalizar y copia el resultado de la derecha.",
+            "Sirve para dejar una lista de RUT chilenos con el mismo formato.",
+            "Proceso: pega un RUT por línea en el cuadro de la izquierda, elige el formato (con o sin puntos y guión; K en minúscula si aplica), haz clic en Normalizar y copia el resultado de la derecha.",
         ],
         "images": [
-            {"file": "07-rut.png", "caption": "Normalizador RUT"},
+            {"file": "07-rut.png", "caption": "Vista del módulo Normalizador RUT"},
         ],
     },
     "textos": {
         "title": "Normalizador de Textos",
         "body": [
-            "Transforma listas de texto a MAYÚSCULAS, minúsculas o Formato Título.",
-            "Pasos:",
-            "1. Pega una línea por registro.",
-            "2. Elige el formato deseado.",
-            "3. Normalizar y copiar el resultado.",
+            "Sirve para transformar listas de texto a MAYÚSCULAS, minúsculas o Formato Título.",
+            "Proceso: pega una línea por registro, elige el formato deseado, haz clic en Normalizar y copia el resultado.",
         ],
         "images": [
-            {"file": "08-textos.png", "caption": "Normalizador de Textos"},
+            {"file": "08-textos.png", "caption": "Vista del módulo Normalizador de Textos"},
         ],
     },
     "capacitaciones": {
         "title": "Capacitaciones Mod 1",
         "body": [
-            "Agenda personal de capacitaciones (título, enlace, duración, notas y fecha). En general solo tú ves lo que guardas con tu usuario.",
-            "Pasos:",
-            "1. Entra al módulo y revisa el listado (puedes buscar).",
-            "2. Nueva Capacitación → completa al menos el título y guarda.",
-            "3. Para eliminar, usa el icono de papelera en la fila correspondiente.",
+            "Sirve como agenda personal de capacitaciones (título, enlace, duración, notas y fecha). En general solo tú ves lo que guardas con tu usuario.",
+            "Proceso: revisa el listado (puedes buscar). Para agregar, usa Nueva Capacitación, completa al menos el título y guarda. Para quitar una, usa el icono de papelera en esa fila.",
         ],
         "images": [
-            {"file": "09-capacitaciones.png", "caption": "Listado de capacitaciones"},
-            {"file": "10-capacitaciones-form.png", "caption": "Formulario de nueva capacitación"},
+            {"file": "09-capacitaciones.png", "caption": "Vista del módulo Capacitaciones"},
         ],
     },
     "enlaces": {
         "title": "Enlaces de interés",
         "body": [
-            "Catálogo de enlaces útiles organizados por empresa.",
-            "Pasos:",
-            "1. Filtra por empresa o busca por texto.",
-            "2. Agrega un enlace con título, URL, empresa y notas opcionales.",
-            "3. Ábrelo en una pestaña nueva, edítalo o elimínalo desde cada tarjeta.",
+            "Sirve para guardar y organizar enlaces útiles por empresa.",
+            "Proceso: filtra por empresa o busca por texto. Para agregar, indica título, URL, empresa y notas opcionales, y guarda. Desde cada tarjeta puedes abrir el enlace, editarlo o eliminarlo.",
         ],
         "images": [
-            {"file": "11-enlaces.png", "caption": "Catálogo de enlaces de interés"},
+            {"file": "11-enlaces.png", "caption": "Vista del módulo Enlaces de interés"},
         ],
     },
     "recordatorios": {
         "title": "Calendario y tareas",
         "body": [
-            "Agenda tareas por día, márcalas como hechas e importa varias desde Excel.",
-            "Calendario: las flechas cambian de mes. Naranja = pendientes, verde = completadas. Haz clic en un día para ver sus tareas.",
-            "Nueva tarea: indica título y, si aplica, curso, grupo, asunto, cuerpo de mail, correo de aviso y notas.",
-            "Importar: pega columnas Día y Tarea desde Excel y confirma en el asistente.",
-            "Mail Composer: el botón abre el sitio externo de BEX con los campos listos; no envía el correo desde esta plataforma.",
-            "Los recordatorios automáticos por SMTP los configura normalmente el área de sistemas.",
+            "Sirve para agendar tareas por día, marcarlas como hechas e importar varias desde Excel.",
+            "Proceso: navega el mes con las flechas (naranja = pendientes, verde = completadas) y haz clic en un día para ver sus tareas. Para crear una, completa el título y, si aplica, curso, grupo, asunto, cuerpo de mail, correo de aviso y notas; luego guarda. Para importar, pega columnas Día y Tarea desde Excel y confirma en el asistente. El botón Abrir Mail Composer abre el sitio externo de BEX con los campos listos; no envía el correo desde esta plataforma.",
         ],
         "images": [
-            {"file": "12-recordatorios-calendario.png", "caption": "Calendario mensual de tareas"},
-            {"file": "13-recordatorios-tarea.png", "caption": "Formulario de nueva tarea"},
-            {"file": "14-recordatorios-smtp.png", "caption": "Configuración SMTP (si está habilitada)"},
+            {"file": "12-recordatorios-calendario.png", "caption": "Vista del módulo Calendario y tareas"},
         ],
     },
     "consulta_cursos": {
         "title": "Reporte Consulta Cursos",
         "body": [
-            "Pega el texto de una consulta de cursos desde Moodle y genera un Excel ordenado.",
-            "Pasos:",
-            "1. Pega el texto completo de la consulta.",
-            "2. Previsualizar para ver totales (registros, cursos, usuarios).",
-            "3. Elige varias hojas (una por curso) o una sola hoja.",
-            "4. Descargar Excel.",
+            "Sirve para convertir el texto de una consulta de cursos de Moodle en un Excel ordenado.",
+            "Proceso: pega el texto completo de la consulta, usa Previsualizar para revisar totales, elige si quieres varias hojas (una por curso) o una sola hoja, y descarga el Excel.",
         ],
         "images": [
-            {"file": "21-consulta-cursos.png", "caption": "Reporte Consulta Cursos"},
+            {"file": "21-consulta-cursos.png", "caption": "Vista del módulo Reporte Consulta Cursos"},
         ],
     },
     "usuarios_duplicados": {
         "title": "Usuarios Duplicados",
         "body": [
-            "Analiza un Excel de nómina o usuarios y detecta grupos duplicados según criterios del sistema (por ejemplo RUT o correo).",
-            "Pasos:",
-            "1. Sube el archivo Excel.",
-            "2. Analizar y revisa los grupos encontrados.",
-            "3. Descarga o copia los resultados. Queda un historial de análisis en la misma pantalla.",
+            "Sirve para analizar un Excel de nómina o usuarios y detectar grupos duplicados (por ejemplo mismo RUT o correo).",
+            "Proceso: sube el archivo Excel, haz clic en Analizar, revisa los grupos encontrados y descarga o copia los resultados. En la misma pantalla queda un historial de análisis previos.",
         ],
         "images": [
-            {"file": "22-usuarios-duplicados.png", "caption": "Usuarios Duplicados"},
+            {"file": "22-usuarios-duplicados.png", "caption": "Vista del módulo Usuarios Duplicados"},
         ],
     },
     "compresor_video": {
         "title": "Compresor MP4",
         "body": [
-            "Comprime videos MP4 y genera un ZIP (reproductor + video) listo para subir a Moodle.",
-            "Pasos:",
-            "1. Elige resolución (720p o 480p) y calidad: Normal o Más compacto.",
-            "2. Más compacto usa 480p y mayor compresión: recomendado para videos de una hora o más (Moodle suele rechazar archivos muy pesados).",
-            "3. Agregar videos → Optimizar → indica LMS e ID de curso.",
-            "4. Cuando termine, usa Descargar ZIP.",
-            "En servidor, los archivos se procesan en el servidor: usa siempre el botón de descarga de la interfaz.",
+            "Sirve para comprimir videos MP4 y generar un ZIP (reproductor + video) listo para subir a Moodle.",
+            "Proceso: elige resolución (720p o 480p) y calidad (Normal o Más compacto; Más compacto se recomienda para videos de una hora o más). Agrega los videos, haz clic en Optimizar e indica LMS e ID de curso. Cuando termine el proceso, usa Descargar ZIP. En servidor, usa siempre el botón de descarga de la interfaz.",
         ],
         "images": [
-            {"file": "23-compresor-videos.png", "caption": "Compresor MP4 (resolución y calidad)"},
+            {"file": "23-compresor-videos.png", "caption": "Vista del módulo Compresor MP4"},
         ],
     },
     "evaluaciones_moodle": {
         "title": "Evaluaciones Moodle",
         "body": [
-            "Ayuda a preparar evaluaciones para importar o documentar en Moodle.",
-            "Puedes:",
-            "• Cargar un Word (.docx) para marcar la alternativa correcta y descargar el archivo modificado.",
-            "• Pegar o cargar texto / formato GIFT (.txt).",
-            "• Ordenar el texto de la evaluación.",
-            "• Convertir a GIFT (con o sin negrita) para importar a Moodle.",
-            "• Exportar a Word desde el editor.",
-            "Flujo típico: pegar borrador → ordenar → convertir a GIFT → descargar .txt o Word.",
+            "Sirve para preparar evaluaciones para importar o documentar en Moodle.",
+            "Proceso: pega o carga el borrador (texto, GIFT .txt o Word .docx). Usa Ordenar para limpiar el contenido. Convierte a GIFT (con o sin negrita) para importar a Moodle, o exporta a Word. Si cargas un Word, puedes marcar la alternativa correcta y descargar el archivo modificado. Flujo habitual: pegar → ordenar → convertir a GIFT → descargar.",
         ],
         "images": [
-            {"file": "24-evaluaciones-moodle.png", "caption": "Evaluaciones Moodle"},
+            {"file": "24-evaluaciones-moodle.png", "caption": "Vista del módulo Evaluaciones Moodle"},
         ],
     },
     "analisis_resultados": {
         "title": "Análisis de Resultados",
         "body": [
-            "Analiza el informe de respuestas de un quiz Moodle (un solo Excel).",
-            "El archivo debe traer, por cada pregunta N: enunciado, respuesta del usuario y respuesta correcta. Funciona con columnas en español, inglés, portugués u otros idiomas del LMS.",
-            "Pasos:",
-            "1. Sube el Excel de respuestas.",
-            "2. Previsualizar: verás porcentaje de acierto, preguntas difíciles y muestras.",
-            "3. Descargar Excel con hojas Resumen, Por pregunta, Por usuario y Detalle de respuestas.",
-            "Se considera acierto si la respuesta del usuario coincide con la correcta. Si una persona rindió varias veces (distinta hora de inicio), aparecen todos los intentos.",
-            "Si el Excel trae RUT o nombre de usuario, también se incluye en el detalle.",
+            "Sirve para analizar el informe de respuestas de un quiz Moodle a partir de un solo Excel.",
+            "Proceso: sube el Excel exportado desde Moodle (debe traer enunciado, respuesta del usuario y respuesta correcta por pregunta). Usa Previsualizar para ver porcentaje de acierto y preguntas difíciles. Luego descarga el Excel con las hojas Resumen, Por pregunta, Por usuario y Detalle de respuestas. Se considera acierto si la respuesta coincide con la correcta; si alguien rindió varias veces, aparecen todos los intentos.",
         ],
         "images": [
-            {"file": "25-analisis-resultados.png", "caption": "Análisis de Resultados"},
+            {"file": "25-analisis-resultados.png", "caption": "Vista del módulo Análisis de Resultados"},
         ],
     },
     "generador": {
         "title": "Generador de Nóminas / Cargas",
         "body": [
-            "Desde Generador de Nóminas eliges el cliente y el proceso. Cada cliente tiene reglas propias.",
-            "BEX — Cargas e inducciones:",
-            "1. Sube el Excel de dotación (títulos en la primera fila).",
-            "2. Elige hoja y columnas (puedes usar Recomendadas Moodle).",
-            "3. Mapea columnas, nombre de grupo y la columna de perfil de inducción (debe coincidir con los perfiles de la plataforma).",
-            "4. Previsualiza y genera el ZIP con un CSV por perfil para subir a Moodle.",
-            "Transelec: altas de usuarios nuevos, externos y asignación (quién falta en la nómina LMS).",
-            "AZA: compara nóminas cliente vs plataforma y descarga un Excel con varias hojas de resultado.",
-            "Resiter: genera CSV Moodle desde matriz SAP según perfil operacional, administrativo o CRM.",
-            "Carozzi: comparar DNI/C.I., comparador Todos Chile y separar cursos activos/inactivos.",
-            "EMIN: comparar nóminas y consolidar cambios del cliente.",
-            "Si un cliente aparece como no disponible, aún no tiene proceso activo en tu instalación.",
+            "Sirve para generar cargas o comparaciones según el cliente. Entra a Generador de Nóminas, elige el cliente y el proceso.",
+            "Proceso BEX (cargas e inducciones): sube el Excel de dotación con títulos en la primera fila; elige hoja y columnas (puedes usar Recomendadas Moodle); mapea columnas, nombre de grupo y la columna de perfil de inducción (debe coincidir con los perfiles de la plataforma); previsualiza y genera el ZIP con un CSV por perfil para Moodle.",
+            "Otros clientes: Transelec (altas, externos, asignación), AZA (comparar nóminas), Resiter (CSV desde matriz SAP), Carozzi (comparar DNI/C.I., Todos Chile, separar cursos) y EMIN (comparar nóminas y consolidar cambios). Cada uno sigue un asistente similar: subir archivo, revisar opciones y descargar el resultado. Si un cliente aparece como no disponible, aún no tiene proceso activo en tu instalación.",
         ],
         "images": [
-            {"file": "15-generador-paso1.png", "caption": "Generador BEX — paso 1: subir Excel"},
-            {"file": "16-generador-paso2.png", "caption": "Generador BEX — paso 2: hoja y columnas"},
-            {"file": "17-generador-paso3.png", "caption": "Generador BEX — paso 3: mapeo"},
-            {"file": "18-generador-paso4.png", "caption": "Generador BEX — paso 4: previsualización"},
+            {"file": "15-generador-paso1.png", "caption": "Vista del módulo Generador de Nóminas"},
         ],
     },
 }
@@ -279,12 +211,10 @@ ADMIN_SECTION: dict[str, Any] = {
     "title": "Panel de Administrador (solo si aplica a tu usuario)",
     "body": [
         "Si eres superadministrador verás Panel de Administrador.",
-        "Desde ahí puedes crear y editar usuarios, asignar permisos por módulo y, según la instalación, configurar el correo SMTP de recordatorios.",
-        "Asigna a cada persona solo los módulos que necesita.",
+        "Proceso: crea o edita usuarios, asigna solo los módulos que cada persona necesita y, según la instalación, configura el correo SMTP de recordatorios. Asigna el mínimo de permisos necesario.",
     ],
     "images": [
-        {"file": "19-admin-usuarios.png", "caption": "Administración de usuarios"},
-        {"file": "20-permisos-usuario.png", "caption": "Permisos por módulo"},
+        {"file": "19-admin-usuarios.png", "caption": "Vista del panel de administración de usuarios"},
     ],
 }
 
@@ -325,7 +255,7 @@ def _write_section(doc: Document, section: dict[str, Any]) -> None:
 
 
 def build_manual_docx(user: Any) -> tuple[bytes, str, list[str]]:
-    """Genera DOCX solo con intro + módulos permitidos (+ imágenes)."""
+    """Genera DOCX solo con intro + módulos permitidos (vista + proceso)."""
     allowed = _allowed_modules(user)
     is_super = getattr(user, "role", None) == "superadmin"
 
@@ -339,8 +269,8 @@ def build_manual_docx(user: Any) -> tuple[bytes, str, list[str]]:
 
     p = doc.add_paragraph()
     run = p.add_run(
-        "Documento generado automáticamente según los permisos de tu cuenta. "
-        "Solo incluye las herramientas a las que tienes acceso, con capturas de pantalla."
+        "Documento generado según los permisos de tu cuenta. "
+        "Cada módulo muestra la vista de la herramienta y el proceso para usarla."
     )
     run.italic = True
     run.font.size = Pt(10)

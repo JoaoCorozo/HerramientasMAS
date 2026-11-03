@@ -1,10 +1,10 @@
 # Carpeta de capturas para el manual
 
-Coloca aquí las imágenes en formato **PNG** con los nombres indicados en `MANUAL_USUARIO_PLATAFORMA_BEX.md`.
+El manual (Markdown y Word in-app) usa **una captura de vista por módulo**, más login y menú.
 
 ## Capturas automáticas (recomendado)
 
-Con la app corriendo en `http://localhost:3000` y sesión `admin` / `admin123`:
+Con la app corriendo en `http://localhost:3000`:
 
 ```bash
 py docs/scripts/capture_screenshots.py
@@ -12,43 +12,24 @@ py docs/scripts/capture_screenshots.py
 
 Variables opcionales: `CAPTURE_BASE_URL`, `CAPTURE_USER`, `CAPTURE_PASSWORD`.
 
-## Capturas manuales
+## Usadas en el manual
 
-1. Abre la app (local: `http://localhost:3000` o tu URL de Vercel).
-2. Usa **Windows + Shift + S** (recorte) o **Impr Pant** y guarda en esta carpeta.
-3. Resolución recomendada: ancho mínimo **1280 px**; recorta solo la zona relevante.
-4. Nombra los archivos **exactamente** como en la lista del manual (ej. `01-login.png`).
-
-## Lista rápida de archivos
-
-| Archivo | Pantalla |
-|---------|----------|
-| `01-login.png` | Página de inicio de sesión |
-| `02-menu-lateral.png` | Menú lateral con módulos visibles |
-| `03-apariencia.png` | Panel Apariencia (engranaje) abierto |
-| `04-comparador-vista.png` | Comparador de Datos completo |
-| `05-comparador-archivos.png` | Tarjetas de carga de Excel |
-| `06-comparador-resultado.png` | Descarga / resultado exitoso |
+| Archivo | Sección |
+|---------|---------|
+| `01-login.png` | Entrar a la plataforma |
+| `02-menu-lateral.png` | Pantalla principal |
+| `04-comparador-vista.png` | Comparador de Datos |
 | `07-rut.png` | Normalizador RUT |
 | `08-textos.png` | Normalizador Textos |
-| `09-capacitaciones.png` | Tabla de capacitaciones |
-| `10-capacitaciones-form.png` | Diálogo nueva capacitación |
+| `09-capacitaciones.png` | Capacitaciones |
 | `11-enlaces.png` | Enlaces de interés |
-| `12-recordatorios-calendario.png` | Calendario mensual |
-| `13-recordatorios-tarea.png` | Formulario de tarea |
-| `14-recordatorios-smtp.png` | Configuración SMTP |
-| `15-generador-paso1.png` | Generador paso 1 – subir Excel |
-| `16-generador-paso2.png` | Generador paso 2 – hoja y columnas |
-| `17-generador-paso3.png` | Generador paso 3 – mapeo |
-| `18-generador-paso4.png` | Generador paso 4 – previsualización |
-| `19-admin-usuarios.png` | *(Admin)* Administrar usuarios |
-| `20-permisos-usuario.png` | *(Admin)* Permisos de módulos |
+| `12-recordatorios-calendario.png` | Calendario y tareas |
+| `15-generador-paso1.png` | Generador de Nóminas |
+| `19-admin-usuarios.png` | Panel de Administrador |
 | `21-consulta-cursos.png` | Reporte Consulta Cursos |
 | `22-usuarios-duplicados.png` | Usuarios Duplicados |
 | `23-compresor-videos.png` | Compresor MP4 |
 | `24-evaluaciones-moodle.png` | Evaluaciones Moodle |
 | `25-analisis-resultados.png` | Análisis de Resultados |
 
-Las capturas 01–25 se incrustan en el Word que el usuario descarga desde la app (**Descargar manual**), solo en las secciones de los módulos a los que tiene permiso.
-
-Cuando existan, el manual también puede exportarse a PDF con `py docs/scripts/export_manual_pdf.py`.
+Las demás PNG del script de captura (pasos intermedios, apariencia, etc.) pueden quedar en la carpeta como referencia; el manual descargable ya no las incrusta.
