@@ -89,6 +89,19 @@ def ensure_user_schema() -> None:
             alters.append(
                 "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT FALSE"
             )
+    if "auth_provider" not in existing:
+        if dialect == "sqlite":
+            alters.append(
+                "ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) DEFAULT 'local'"
+            )
+        else:
+            alters.append(
+                "ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) NOT NULL DEFAULT 'local'"
+            )
+    if "oidc_sub" not in existing:
+        alters.append("ALTER TABLE users ADD COLUMN oidc_sub VARCHAR(255) NULL")
+    if "oidc_tenant" not in existing:
+        alters.append("ALTER TABLE users ADD COLUMN oidc_tenant VARCHAR(50) NULL")
     if not alters:
         return
     with engine.begin() as conn:

@@ -13,3 +13,4 @@ PyMySQL>=1.1.0
 cryptography
 python-dotenv
 python-docx
+httpx>=0.27.0

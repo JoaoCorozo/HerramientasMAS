@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status, Body, Response, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import io
@@ -25,6 +25,7 @@ import models
 import auth
 import config
 from deps import get_current_user, require_permission, check_login_rate_limit
+import oidc as oidc_client
 from security_utils import (
     safe_upload_filename,
     safe_planilla_filename,
@@ -436,6 +437,11 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
+    if not config.OIDC_LOCAL_LOGIN_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail="El login local está deshabilitado. Use SSO.",
+        )
     check_login_rate_limit(request)
     username = (form_data.username or "").strip()
     user = db.query(models.User).filter(models.User.username == username).first()
@@ -460,6 +466,129 @@ def login(
         "message": "ok",
         "must_change_password": bool(getattr(user, "must_change_password", False)),
     }
+
+
+@app.get("/api/auth/oidc/status")
+def oidc_status():
+    """El frontend usa esto para mostrar botones SSO si hay tenants configurados."""
+    return {
+        "enabled": config.OIDC_ENABLED,
+        "tenants": config.oidc_configured_tenants(),
+        "local_login_enabled": config.OIDC_LOCAL_LOGIN_ENABLED,
+    }
+
+
+@app.get("/api/auth/oidc/login")
+async def oidc_login(tenant: str = "mas"):
+    if not config.OIDC_ENABLED:
+        raise HTTPException(status_code=503, detail="SSO no configurado")
+    try:
+        url, _state = await oidc_client.build_authorize_url(tenant)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Error iniciando OIDC (%s)", tenant)
+        raise HTTPException(status_code=502, detail="No se pudo contactar Authentik") from exc
+    return RedirectResponse(url=url, status_code=302)
+
+
+@app.get("/api/auth/oidc/callback")
+async def oidc_callback(
+    request: Request,
+    db: Session = Depends(get_db),
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+):
+    frontend = (config.PUBLIC_FRONTEND_URL or "").rstrip("/") or "http://localhost:3000"
+
+    def fail(msg: str) -> RedirectResponse:
+        from urllib.parse import quote
+
+        return RedirectResponse(
+            url=f"{frontend}/login?sso_error={quote(msg)}",
+            status_code=302,
+        )
+
+    if error:
+        return fail(error_description or error)
+    if not code or not state:
+        return fail("Respuesta OIDC incompleta")
+
+    try:
+        state_data = oidc_client.parse_oidc_state(state)
+        tenant = state_data["tenant"]
+        exchanged = await oidc_client.exchange_code(tenant, code)
+    except Exception as exc:
+        logger.exception("OIDC callback falló")
+        return fail(str(exc) or "Error en SSO")
+
+    claims = exchanged["claims"]
+    cfg = exchanged["config"]
+    email = _normalize_email(claims.get("email") or "")
+    sub = str(claims.get("sub") or "").strip()
+    if not email or not sub:
+        return fail("El IdP no envió email/sub")
+
+    if not oidc_client.email_allowed(email, cfg.get("allowed_domains") or []):
+        return fail("Tu dominio de correo no está autorizado")
+
+    given = (claims.get("given_name") or claims.get("name") or "").strip()
+    family = (claims.get("family_name") or "").strip()
+    if given and " " in given and not family:
+        parts = given.split(None, 1)
+        given, family = parts[0], parts[1]
+
+    user = (
+        db.query(models.User)
+        .filter(models.User.oidc_sub == sub, models.User.oidc_tenant == tenant)
+        .first()
+    )
+    if not user:
+        user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        user = (
+            db.query(models.User)
+            .filter(models.User.username == oidc_client.username_from_email(email))
+            .first()
+        )
+
+    if not user:
+        if not config.OIDC_AUTO_CREATE_USERS:
+            return fail("Usuario no registrado. Contacta a un administrador.")
+        user = models.User(
+            username=oidc_client.username_from_email(email),
+            hashed_password=auth.get_password_hash(auth.generate_temporary_password(24)),
+            role="user",
+            permissions_json=json.dumps(config.OIDC_DEFAULT_PERMISSIONS),
+            email=email,
+            nombre=given[:100],
+            apellido=family[:100],
+            must_change_password=False,
+            auth_provider="oidc",
+            oidc_sub=sub,
+            oidc_tenant=tenant,
+        )
+        db.add(user)
+    else:
+        user.email = email or (user.email or "")
+        user.auth_provider = "oidc"
+        user.oidc_sub = sub
+        user.oidc_tenant = tenant
+        user.must_change_password = False
+        if given and not (user.nombre or "").strip():
+            user.nombre = given[:100]
+        if family and not (user.apellido or "").strip():
+            user.apellido = family[:100]
+
+    db.commit()
+    db.refresh(user)
+
+    access_token = auth.create_access_token(data={"sub": user.username})
+    response = RedirectResponse(url=f"{frontend}/", status_code=302)
+    set_auth_cookie(response, access_token)
+    return response
 
 
 @app.post("/api/auth/logout")
@@ -548,6 +677,9 @@ def create_user(user: UserCreate, current_user: models.User = Depends(get_curren
         nombre=nombre,
         apellido=apellido,
         must_change_password=True,
+        auth_provider="local",
+        oidc_sub="",
+        oidc_tenant="",
     )
     db.add(db_user)
     db.commit()

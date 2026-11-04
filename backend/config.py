@@ -97,3 +97,81 @@ else:
     COOKIE_SECURE = IS_PRODUCTION
 
 APP_ENCRYPTION_KEY = os.getenv("APP_ENCRYPTION_KEY") or JWT_SECRET_KEY
+
+# --- OIDC / Authentik (Google como IdP detrás de Authentik) ---
+# Cliente único (herramientas-lms) o por tenant: OIDC_{KEY}_ISSUER / CLIENT_ID / SECRET.
+# Redirect debe coincidir EXACTO con Authentik (hoy: .../auth/callback).
+OIDC_TENANTS = [
+    t.strip().lower()
+    for t in os.getenv("OIDC_TENANTS", "lms").split(",")
+    if t.strip()
+]
+# No hacer rstrip del path: Authentik registra /auth/callback exacto
+OIDC_REDIRECT_URI = (os.getenv("OIDC_REDIRECT_URI") or "").strip()
+OIDC_SCOPES = os.getenv("OIDC_SCOPES", "openid email profile")
+OIDC_AUTO_CREATE_USERS = os.getenv("OIDC_AUTO_CREATE_USERS", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+OIDC_DEFAULT_PERMISSIONS = [
+    p.strip()
+    for p in os.getenv("OIDC_DEFAULT_PERMISSIONS", "").split(",")
+    if p.strip() and p.strip() in VALID_MODULES
+]
+OIDC_LOCAL_LOGIN_ENABLED = os.getenv("OIDC_LOCAL_LOGIN_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+OIDC_TENANT_LABELS = {
+    "lms": os.getenv("OIDC_LMS_LABEL", "Google"),
+    "mas": os.getenv("OIDC_MAS_LABEL", "MAS"),
+    "roi": os.getenv("OIDC_ROI_LABEL", "ROI"),
+}
+
+
+def oidc_tenant_config(tenant: str) -> dict | None:
+    """Devuelve issuer/client_id/secret/domains para un tenant, o None si incompleto."""
+    key = (tenant or "").strip().lower()
+    if not key:
+        return None
+    prefix = f"OIDC_{key.upper()}_"
+    # Issuer: conservar barra final si Authentik la publica (el claim iss es exacto)
+    issuer = (os.getenv(f"{prefix}ISSUER") or os.getenv("OIDC_ISSUER") or "").strip()
+    client_id = (os.getenv(f"{prefix}CLIENT_ID") or os.getenv("OIDC_CLIENT_ID") or "").strip()
+    client_secret = (
+        os.getenv(f"{prefix}CLIENT_SECRET") or os.getenv("OIDC_CLIENT_SECRET") or ""
+    ).strip()
+    domains_raw = os.getenv(f"{prefix}ALLOWED_DOMAINS") or os.getenv("OIDC_ALLOWED_DOMAINS") or ""
+    allowed_domains = [d.strip().lower().lstrip("@") for d in domains_raw.split(",") if d.strip()]
+    if not (issuer and client_id and client_secret and OIDC_REDIRECT_URI):
+        return None
+    return {
+        "id": key,
+        "label": OIDC_TENANT_LABELS.get(key, key.upper()),
+        "issuer": issuer,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "allowed_domains": allowed_domains,
+        "redirect_uri": OIDC_REDIRECT_URI,
+        "scopes": OIDC_SCOPES,
+    }
+
+
+def oidc_configured_tenants() -> list[dict]:
+    """Lista botones SSO. Si todos comparten el mismo client_id, un solo botón."""
+    seen_clients: set[str] = set()
+    out: list[dict] = []
+    for t in OIDC_TENANTS:
+        cfg = oidc_tenant_config(t)
+        if not cfg:
+            continue
+        if cfg["client_id"] in seen_clients:
+            continue
+        seen_clients.add(cfg["client_id"])
+        out.append({"id": cfg["id"], "label": cfg["label"]})
+    return out
+
+
+OIDC_ENABLED = bool(oidc_configured_tenants())
