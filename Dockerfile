@@ -39,9 +39,9 @@ ENV PYTHONUNBUFFERED=1 \
     MATRIZ_CURSOS_PATH="/app/cursos bex Moodle.xlsx" \
     COMPRESOR_ROOT=/app/compresor_video
 
-EXPOSE 8000
+EXPOSE 8001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:8000/api/health || exit 1
+  CMD curl -fsS http://127.0.0.1:8001/api/health || exit 1
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
