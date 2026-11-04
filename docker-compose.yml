@@ -88,7 +88,8 @@ services:
       backend:
         condition: service_healthy
     environment:
-      BACKEND_URL: http://backend:8000
+      # Puerto interno del contenedor backend (uvicorn); no usar el mapeo del host
+      BACKEND_URL: http://backend:8001
       NEXT_PUBLIC_API_URL: ""
       HOSTNAME: 0.0.0.0
       PORT: "3001"
