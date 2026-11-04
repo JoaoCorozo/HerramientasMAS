@@ -52,6 +52,9 @@ function LoginForm() {
       })
 
       if (!response.ok) {
+        if (response.status >= 500) {
+          throw new Error("El servidor no responde. Avisa a sistemas (API/backend).")
+        }
         throw new Error("Credenciales incorrectas")
       }
 

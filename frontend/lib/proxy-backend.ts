@@ -31,15 +31,28 @@ export async function proxyToBackend(request: Request, pathSegments: string[]) {
     init.duplex = "half"
   }
 
-  const upstream = await fetch(target, init)
-  const responseHeaders = new Headers()
-  upstream.headers.forEach((value, key) => {
-    if (SKIP_RESPONSE_HEADERS.has(key.toLowerCase())) return
-    responseHeaders.append(key, value)
-  })
+  try {
+    const upstream = await fetch(target, init)
+    const responseHeaders = new Headers()
+    upstream.headers.forEach((value, key) => {
+      if (SKIP_RESPONSE_HEADERS.has(key.toLowerCase())) return
+      responseHeaders.append(key, value)
+    })
 
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: responseHeaders,
-  })
+    return new Response(upstream.body, {
+      status: upstream.status,
+      headers: responseHeaders,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "backend unreachable"
+    return Response.json(
+      {
+        detail: "No se pudo contactar al backend",
+        backend: BACKEND,
+        target,
+        error: message,
+      },
+      { status: 502 },
+    )
+  }
 }

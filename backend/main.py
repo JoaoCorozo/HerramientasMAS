@@ -25,7 +25,6 @@ import models
 import auth
 import config
 from deps import get_current_user, require_permission, check_login_rate_limit
-import oidc as oidc_client
 from security_utils import (
     safe_upload_filename,
     safe_planilla_filename,
@@ -471,15 +470,25 @@ def login(
 @app.get("/api/auth/oidc/status")
 def oidc_status():
     """El frontend usa esto para mostrar botones SSO si hay tenants configurados."""
-    return {
-        "enabled": config.OIDC_ENABLED,
-        "tenants": config.oidc_configured_tenants(),
-        "local_login_enabled": config.OIDC_LOCAL_LOGIN_ENABLED,
-    }
+    try:
+        return {
+            "enabled": config.OIDC_ENABLED,
+            "tenants": config.oidc_configured_tenants(),
+            "local_login_enabled": config.OIDC_LOCAL_LOGIN_ENABLED,
+        }
+    except Exception:
+        logger.exception("OIDC status falló")
+        return {
+            "enabled": False,
+            "tenants": [],
+            "local_login_enabled": True,
+        }
 
 
 @app.get("/api/auth/oidc/login")
-async def oidc_login(tenant: str = "mas"):
+async def oidc_login(tenant: str = "lms"):
+    import oidc as oidc_client
+
     if not config.OIDC_ENABLED:
         raise HTTPException(status_code=503, detail="SSO no configurado")
     try:
@@ -501,6 +510,8 @@ async def oidc_callback(
     error: str | None = None,
     error_description: str | None = None,
 ):
+    import oidc as oidc_client
+
     frontend = (config.PUBLIC_FRONTEND_URL or "").rstrip("/") or "http://localhost:3000"
 
     def fail(msg: str) -> RedirectResponse:
