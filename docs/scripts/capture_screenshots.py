@@ -191,7 +191,6 @@ async def main():
             ("/admin/usuarios", "19-admin-usuarios.png"),
             ("/admin/usuarios", "20-permisos-usuario.png"),
             ("/consulta-cursos", "21-consulta-cursos.png"),
-            ("/usuarios-duplicados", "22-usuarios-duplicados.png"),
             ("/compresor-videos", "23-compresor-videos.png"),
             ("/evaluaciones-moodle", "24-evaluaciones-moodle.png"),
             ("/analisis-resultados", "25-analisis-resultados.png"),

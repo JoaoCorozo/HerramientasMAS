@@ -92,16 +92,6 @@ Sirve para convertir el texto de una consulta de cursos de Moodle en un Excel or
 
 ---
 
-## Usuarios Duplicados
-
-Sirve para analizar un Excel de nómina o usuarios y detectar grupos duplicados (por ejemplo mismo RUT o correo).
-
-**Proceso:** sube el archivo Excel, haz clic en **Analizar**, revisa los grupos encontrados y descarga o copia los resultados. En la misma pantalla queda un historial de análisis previos.
-
-![Vista de Usuarios Duplicados](capturas/22-usuarios-duplicados.png)
-
----
-
 ## Compresor MP4
 
 Sirve para comprimir videos MP4 y generar un ZIP (reproductor + video) listo para subir a Moodle.

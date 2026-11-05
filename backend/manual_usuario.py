@@ -154,16 +154,6 @@ MODULE_MANUAL: dict[str, dict[str, Any]] = {
             {"file": "21-consulta-cursos.png", "caption": "Vista del módulo Reporte Consulta Cursos"},
         ],
     },
-    "usuarios_duplicados": {
-        "title": "Usuarios Duplicados",
-        "body": [
-            "Sirve para analizar un Excel de nómina o usuarios y detectar grupos duplicados (por ejemplo mismo RUT o correo).",
-            "Proceso: sube el archivo Excel, haz clic en Analizar, revisa los grupos encontrados y descarga o copia los resultados. En la misma pantalla queda un historial de análisis previos.",
-        ],
-        "images": [
-            {"file": "22-usuarios-duplicados.png", "caption": "Vista del módulo Usuarios Duplicados"},
-        ],
-    },
     "compresor_video": {
         "title": "Compresor MP4",
         "body": [
@@ -226,7 +216,6 @@ MODULE_ORDER = [
     "enlaces",
     "recordatorios",
     "consulta_cursos",
-    "usuarios_duplicados",
     "compresor_video",
     "evaluaciones_moodle",
     "analisis_resultados",

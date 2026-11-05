@@ -246,7 +246,7 @@ async def dispatcher_background_loop():
 DEFAULT_ADMIN_PERMISSIONS = json.dumps([
     "comparador", "rut", "textos", "capacitaciones",
     "enlaces", "recordatorios", "generador", "consulta_cursos",
-    "usuarios_duplicados", "compresor_video", "evaluaciones_moodle",
+    "compresor_video", "evaluaciones_moodle",
     "analisis_resultados",
 ])
 
@@ -957,136 +957,6 @@ def export_consulta_cursos_excel(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=generic_error_detail(e, "reporte consulta cursos"))
-
-
-# === USUARIOS DUPLICADOS (mdl_user) ===
-from mdl_user_duplicados import (
-    analyze_duplicates,
-    build_excel_bytes as build_duplicados_excel,
-    build_result_payload,
-    read_mdl_user_file,
-)
-
-MDL_USER_HISTORY_KEY = "usuarios_duplicados"
-MDL_USER_MAX_SCANS = 20
-
-
-def _load_duplicados_history(username: str, db: Session) -> dict:
-    data = get_json_db(MDL_USER_HISTORY_KEY, username, db)
-    if isinstance(data, dict) and isinstance(data.get("scans"), list):
-        return data
-    return {"scans": []}
-
-
-def _save_duplicados_scan(username: str, scan: dict, db: Session) -> dict:
-    history = _load_duplicados_history(username, db)
-    scans = history.get("scans", [])
-    scans.insert(0, scan)
-    history["scans"] = scans[:MDL_USER_MAX_SCANS]
-    save_db(MDL_USER_HISTORY_KEY, username, history, db)
-    return scan
-
-
-@app.post("/api/usuarios-duplicados/analizar")
-async def analizar_usuarios_duplicados(
-    file: UploadFile = File(...),
-    current_user: models.User = Depends(require_permission("usuarios_duplicados")),
-    db: Session = Depends(get_db),
-):
-    path = None
-    try:
-        safe_name = safe_planilla_filename(file.filename)
-        content = await read_upload_limited(file)
-        path = os.path.join(tempfile.mkdtemp(), safe_name)
-        with open(path, "wb") as f:
-            f.write(content)
-
-        _, rows = read_mdl_user_file(path)
-        analysis = analyze_duplicates(rows)
-        scan = build_result_payload(file.filename or safe_name, analysis)
-        _save_duplicados_scan(current_user.username, scan, db)
-        return scan
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=generic_error_detail(exc, "análisis de duplicados"))
-    finally:
-        if path and os.path.exists(path):
-            shutil.rmtree(os.path.dirname(path), ignore_errors=True)
-
-
-@app.get("/api/usuarios-duplicados/historial")
-def historial_usuarios_duplicados(
-    current_user: models.User = Depends(require_permission("usuarios_duplicados")),
-    db: Session = Depends(get_db),
-):
-    history = _load_duplicados_history(current_user.username, db)
-    summaries = []
-    for scan in history.get("scans", []):
-        summaries.append(
-            {
-                "id": scan.get("id"),
-                "filename": scan.get("filename"),
-                "analyzed_at": scan.get("analyzed_at"),
-                "total_rows": scan.get("total_rows", 0),
-                "duplicate_groups": scan.get("duplicate_groups", 0),
-                "duplicate_rows": scan.get("duplicate_rows", 0),
-                "rows_without_key": scan.get("rows_without_key", 0),
-                "by_criterion": scan.get("by_criterion", {}),
-            }
-        )
-    return {"scans": summaries}
-
-
-@app.get("/api/usuarios-duplicados/historial/{scan_id}")
-def obtener_scan_usuarios_duplicados(
-    scan_id: str,
-    current_user: models.User = Depends(require_permission("usuarios_duplicados")),
-    db: Session = Depends(get_db),
-):
-    history = _load_duplicados_history(current_user.username, db)
-    for scan in history.get("scans", []):
-        if scan.get("id") == scan_id:
-            return scan
-    raise HTTPException(status_code=404, detail="Análisis no encontrado.")
-
-
-@app.delete("/api/usuarios-duplicados/historial")
-def limpiar_historial_usuarios_duplicados(
-    current_user: models.User = Depends(require_permission("usuarios_duplicados")),
-    db: Session = Depends(get_db),
-):
-    save_db(MDL_USER_HISTORY_KEY, current_user.username, {"scans": []}, db)
-    return {"status": "success"}
-
-
-class DuplicadosExcelInput(BaseModel):
-    scan_id: str | None = None
-
-
-@app.post("/api/usuarios-duplicados/excel")
-def exportar_usuarios_duplicados_excel(
-    data: DuplicadosExcelInput,
-    current_user: models.User = Depends(require_permission("usuarios_duplicados")),
-    db: Session = Depends(get_db),
-):
-    if not data.scan_id:
-        raise HTTPException(status_code=400, detail="Indique el análisis a exportar.")
-    history = _load_duplicados_history(current_user.username, db)
-    scan = next((s for s in history.get("scans", []) if s.get("id") == data.scan_id), None)
-    if not scan:
-        raise HTTPException(status_code=404, detail="Análisis no encontrado.")
-    try:
-        content, filename = build_duplicados_excel(scan)
-        return StreamingResponse(
-            iter([content]),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=generic_error_detail(exc, "exportación duplicados"))
 
 
 # === CRUD JSON ===

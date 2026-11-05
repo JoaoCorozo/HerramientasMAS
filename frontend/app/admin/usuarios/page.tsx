@@ -19,7 +19,6 @@ const MODULES = [
   { id: "recordatorios", label: "Recordatorios" },
   { id: "generador", label: "Generador de Cargas" },
   { id: "consulta_cursos", label: "Reporte Consulta Cursos" },
-  { id: "usuarios_duplicados", label: "Usuarios Duplicados" },
   { id: "compresor_video", label: "Compresor MP4" },
   { id: "evaluaciones_moodle", label: "Evaluaciones Moodle" },
   { id: "analisis_resultados", label: "Análisis de Resultados" },

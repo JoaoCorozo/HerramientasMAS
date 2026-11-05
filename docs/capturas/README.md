@@ -27,7 +27,6 @@ Variables opcionales: `CAPTURE_BASE_URL`, `CAPTURE_USER`, `CAPTURE_PASSWORD`.
 | `15-generador-paso1.png` | Generador de Nóminas |
 | `19-admin-usuarios.png` | Panel de Administrador |
 | `21-consulta-cursos.png` | Reporte Consulta Cursos |
-| `22-usuarios-duplicados.png` | Usuarios Duplicados |
 | `23-compresor-videos.png` | Compresor MP4 |
 | `24-evaluaciones-moodle.png` | Evaluaciones Moodle |
 | `25-analisis-resultados.png` | Análisis de Resultados |
