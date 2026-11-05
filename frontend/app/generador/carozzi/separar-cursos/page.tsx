@@ -6,6 +6,7 @@ import { AlertCircle, ArrowLeft, FileSpreadsheet, Play } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 import { apiFetch } from "@/lib/api"
+import { TemplateDownload } from "@/components/template-download"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -213,7 +214,10 @@ export default function CarozziSepararCursosPage() {
 
           <div className="space-y-6 rounded-xl border border-border bg-card p-6 shadow-sm">
             <div className="space-y-2">
-              <Label htmlFor="archivo-cursos">1. Listado cursos aprobados (CSV)</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="archivo-cursos">1. Listado cursos aprobados (CSV)</Label>
+                <TemplateDownload href="/templates/carozzi-cursos-aprobados.csv" />
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"

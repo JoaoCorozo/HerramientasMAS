@@ -28,6 +28,7 @@ backend/cookies.txt
 *.xls
 !cursos bex Moodle.xlsx
 !cursos bex Moodle.xls
+!frontend/public/templates/*.csv
 backend/Joao_*.json
 *_db.json
 respaldo_*.sql

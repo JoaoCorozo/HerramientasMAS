@@ -14,6 +14,7 @@ import {
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 import { apiFetch } from "@/lib/api"
+import { TemplateDownload } from "@/components/template-download"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
@@ -207,7 +208,10 @@ export default function ResiterPage() {
             </TabsList>
 
             <TabsContent value="archivo">
-              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+              <div className="space-y-3 rounded-xl border border-border bg-card p-6 shadow-sm">
+                <div className="flex justify-end">
+                  <TemplateDownload href="/templates/resiter-matriz.csv" />
+                </div>
                 <div
                   className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/10 p-10 text-center hover:bg-muted/20"
                   onClick={() => fileRef.current?.click()}
