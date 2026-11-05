@@ -5,32 +5,30 @@ import logging
 
 from compresor_engine import (
     COMPRESOR_ROOT,
-    INPUT_DIR,
-    OUTPUT_DIR,
     ensure_dirs,
+    ensure_user_dirs,
     get_engine,
     resolve_ffmpeg,
+    user_input_dir,
 )
 
 logger = logging.getLogger(__name__)
 
-# Re-export para rutas de upload
 __all__ = [
     "COMPRESOR_ROOT",
-    "INPUT_DIR",
-    "OUTPUT_DIR",
     "clear_compresor_queue",
     "clear_input_folder",
     "ensure_compresor_server",
     "proxy_json",
     "resolve_download_zip",
+    "user_input_dir",
 ]
 
 
-def clear_input_folder() -> int:
-    ensure_dirs()
+def clear_input_folder(username: str) -> int:
+    inp, _ = ensure_user_dirs(username)
     removed = 0
-    for path in INPUT_DIR.glob("*.mp4"):
+    for path in inp.glob("*.mp4"):
         try:
             path.unlink(missing_ok=True)
             removed += 1
@@ -39,10 +37,10 @@ def clear_input_folder() -> int:
     return removed
 
 
-def ensure_compresor_server() -> str:
-    """Inicializa el motor y valida FFmpeg/plantilla. Devuelve etiqueta de motor."""
+def ensure_compresor_server(username: str) -> str:
+    """Inicializa el motor del usuario y valida FFmpeg/plantilla."""
     ensure_dirs()
-    engine = get_engine()
+    engine = get_engine(username)
     ffmpeg = resolve_ffmpeg()
     if not ffmpeg:
         raise FileNotFoundError(
@@ -50,15 +48,14 @@ def ensure_compresor_server() -> str:
             "en local agregue ffmpeg al PATH o copie ffmpeg.exe a "
             f"{COMPRESOR_ROOT / 'bin'}."
         )
-    # touch engine / dirs
     engine.get_items_response()
     return "python://compresor-engine"
 
 
-def proxy_json(method: str, api_path: str, payload: dict | None = None) -> dict:
+def proxy_json(method: str, api_path: str, payload: dict | None = None, *, username: str) -> dict:
     """Compatibilidad con las rutas existentes (antes HTTP al sidecar PS)."""
-    ensure_compresor_server()
-    engine = get_engine()
+    ensure_compresor_server(username)
+    engine = get_engine(username)
     path = api_path.rstrip("/") or "/"
     method_u = method.upper()
     body = payload if payload is not None else {}
@@ -84,10 +81,9 @@ def proxy_json(method: str, api_path: str, payload: dict | None = None) -> dict:
     raise RuntimeError(f"Ruta de compresor no soportada: {method_u} {api_path}")
 
 
-def clear_compresor_queue() -> dict:
-    ensure_compresor_server()
-    engine = get_engine()
-    # Detener si hay trabajo activo
+def clear_compresor_queue(username: str) -> dict:
+    ensure_compresor_server(username)
+    engine = get_engine(username)
     data = engine.get_items_response()
     active = bool(data.get("queueActive")) or any(
         (item or {}).get("status") in ("running", "queued")
@@ -101,6 +97,6 @@ def clear_compresor_queue() -> dict:
     return engine.clear_queue()
 
 
-def resolve_download_zip(zip_name: str):
-    ensure_compresor_server()
-    return get_engine().resolve_download(zip_name)
+def resolve_download_zip(zip_name: str, username: str):
+    ensure_compresor_server(username)
+    return get_engine(username).resolve_download(zip_name)

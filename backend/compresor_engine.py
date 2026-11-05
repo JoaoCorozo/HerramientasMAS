@@ -131,6 +131,19 @@ def resolve_ffmpeg() -> Path | None:
     return None
 
 
+def user_slug(username: str) -> str:
+    """Carpeta segura por usuario (aisla cola/input/output entre cuentas)."""
+    return _safe_slug((username or "").strip() or "anonimo", "anonimo")[:80]
+
+
+def user_input_dir(username: str) -> Path:
+    return INPUT_DIR / user_slug(username)
+
+
+def user_output_dir(username: str) -> Path:
+    return OUTPUT_DIR / user_slug(username)
+
+
 def ensure_dirs() -> None:
     for folder in (
         INPUT_DIR,
@@ -143,6 +156,15 @@ def ensure_dirs() -> None:
         COMPRESOR_ROOT / "bin",
     ):
         folder.mkdir(parents=True, exist_ok=True)
+
+
+def ensure_user_dirs(username: str) -> tuple[Path, Path]:
+    ensure_dirs()
+    inp = user_input_dir(username)
+    out = user_output_dir(username)
+    inp.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
+    return inp, out
 
 
 def _app_log(message: str) -> None:
@@ -215,6 +237,7 @@ def _unique_zip_path(
     course_id: str,
     *,
     compact: bool = False,
+    output_dir: Path | None = None,
 ) -> Path:
     clean_name = _safe_slug(input_path.stem, "video")
     lms_info = _get_lms(lms)
@@ -222,10 +245,12 @@ def _unique_zip_path(
     clean_course = re.sub(r"[^0-9]", "", course_id or "")
     suffix = f"{height}p_compacto" if compact else f"{height}p"
     stem = f"{clean_name}_{clean_lms}_curso_{clean_course}_{suffix}"
-    candidate = OUTPUT_DIR / f"{stem}.zip"
+    base = output_dir or OUTPUT_DIR
+    base.mkdir(parents=True, exist_ok=True)
+    candidate = base / f"{stem}.zip"
     counter = 2
     while candidate.exists():
-        candidate = OUTPUT_DIR / f"{stem}_{counter}.zip"
+        candidate = base / f"{stem}_{counter}.zip"
         counter += 1
     return candidate
 
@@ -287,9 +312,12 @@ def _build_zip_package(
 
 
 class CompresorEngine:
-    """Cola en proceso (un video a la vez), API compatible con el sidecar PS."""
+    """Cola en proceso por usuario (un video a la vez), API compatible con el sidecar PS."""
 
-    def __init__(self) -> None:
+    def __init__(self, username: str) -> None:
+        self.username = (username or "").strip() or "anonimo"
+        self.owner_slug = user_slug(self.username)
+        self.input_dir, self.output_dir = ensure_user_dirs(self.username)
         self._lock = threading.RLock()
         self._items: dict[str, dict] = {}
         self._cancel_requested = False
@@ -297,7 +325,6 @@ class CompresorEngine:
         self._queue_finished_at: float | None = None
         self._worker_thread: threading.Thread | None = None
         self._current_proc: subprocess.Popen | None = None
-        ensure_dirs()
 
     def _plain_item(self, item: dict) -> dict:
         return {
@@ -339,8 +366,9 @@ class CompresorEngine:
             return {
                 "ok": True,
                 "ffmpegExists": bool(ffmpeg),
-                "inputDir": str(INPUT_DIR),
-                "outputDir": str(OUTPUT_DIR),
+                "inputDir": str(self.input_dir),
+                "outputDir": str(self.output_dir),
+                "owner": self.username,
                 "queueActive": active,
                 "queueElapsedSeconds": elapsed,
                 "items": [self._plain_item(i) for i in self._items.values()],
@@ -378,12 +406,12 @@ class CompresorEngine:
 
     def scan_input(self) -> dict:
         with self._lock:
-            ensure_dirs()
+            ensure_user_dirs(self.username)
             active = any(i.get("status") in ("running", "queued") for i in self._items.values())
             if active:
                 raise RuntimeError("No se puede escanear mientras hay una cola activa.")
 
-            files = sorted(INPUT_DIR.glob("*.mp4"))
+            files = sorted(self.input_dir.glob("*.mp4"))
             paths = {str(p.resolve()) for p in files}
 
             for item_id in list(self._items.keys()):
@@ -408,7 +436,7 @@ class CompresorEngine:
                 item = self._new_item(path, "input", "Desde input")
                 self._items[item["id"]] = item
 
-            _app_log(f"Videos encontrados: {len(files)}")
+            _app_log(f"[{self.owner_slug}] Videos encontrados: {len(files)}")
             response = self.get_items_response()
             response["found"] = len(files)
             return response
@@ -431,7 +459,7 @@ class CompresorEngine:
                 del self._items[item_id]
                 removed_items += 1
 
-            for path in list(INPUT_DIR.glob("*.mp4")):
+            for path in list(self.input_dir.glob("*.mp4")):
                 referenced = any(i.get("path") == str(path.resolve()) for i in self._items.values())
                 if referenced:
                     continue
@@ -567,19 +595,19 @@ class CompresorEngine:
             return response
 
     def open_output(self) -> dict:
-        ensure_dirs()
+        ensure_user_dirs(self.username)
         opened = False
         if os.name == "nt":
             try:
-                os.startfile(str(OUTPUT_DIR))  # type: ignore[attr-defined]
+                os.startfile(str(self.output_dir))  # type: ignore[attr-defined]
                 opened = True
             except OSError:
                 opened = False
-        zips = sorted(OUTPUT_DIR.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+        zips = sorted(self.output_dir.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
         return {
             "ok": True,
             "opened": opened,
-            "outputDir": str(OUTPUT_DIR),
+            "outputDir": str(self.output_dir),
             "files": [{"name": z.name, "size": z.stat().st_size} for z in zips[:50]],
             "message": (
                 "Carpeta de salida abierta."
@@ -592,8 +620,9 @@ class CompresorEngine:
         safe = Path(zip_name).name
         if not safe.lower().endswith(".zip"):
             raise RuntimeError("Solo se permiten archivos ZIP.")
-        path = (OUTPUT_DIR / safe).resolve()
-        if not str(path).startswith(str(OUTPUT_DIR.resolve())):
+        out_root = self.output_dir.resolve()
+        path = (self.output_dir / safe).resolve()
+        if not str(path).startswith(str(out_root)):
             raise RuntimeError("Ruta inválida.")
         if not path.is_file():
             raise RuntimeError("ZIP no encontrado.")
@@ -602,7 +631,11 @@ class CompresorEngine:
     def _ensure_worker(self) -> None:
         if self._worker_thread and self._worker_thread.is_alive():
             return
-        self._worker_thread = threading.Thread(target=self._worker_loop, name="compresor-worker", daemon=True)
+        self._worker_thread = threading.Thread(
+            target=self._worker_loop,
+            name=f"compresor-worker-{self.owner_slug}",
+            daemon=True,
+        )
         self._worker_thread.start()
 
     def _worker_loop(self) -> None:
@@ -652,6 +685,7 @@ class CompresorEngine:
             item.get("lms") or "",
             item.get("courseId") or "",
             compact=compact,
+            output_dir=self.output_dir,
         )
 
         for p in (cancel_path, progress_file, temp_output):
@@ -865,13 +899,16 @@ class CompresorEngine:
             item["finishedAt"] = _now_iso()
 
 
-_ENGINE: CompresorEngine | None = None
+_ENGINES: dict[str, CompresorEngine] = {}
 _ENGINE_LOCK = threading.Lock()
 
 
-def get_engine() -> CompresorEngine:
-    global _ENGINE
+def get_engine(username: str) -> CompresorEngine:
+    """Un motor (cola + carpetas) por usuario autenticado."""
+    key = user_slug(username)
     with _ENGINE_LOCK:
-        if _ENGINE is None:
-            _ENGINE = CompresorEngine()
-        return _ENGINE
+        engine = _ENGINES.get(key)
+        if engine is None:
+            engine = CompresorEngine(username)
+            _ENGINES[key] = engine
+        return engine

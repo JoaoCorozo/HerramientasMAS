@@ -8,11 +8,11 @@ from fastapi.responses import FileResponse
 
 import models
 from compresor_service import (
-    INPUT_DIR,
     clear_compresor_queue,
     ensure_compresor_server,
     proxy_json,
     resolve_download_zip,
+    user_input_dir,
 )
 from config import COMPRESOR_VIDEO_MAX_BYTES
 from deps import require_permission
@@ -21,13 +21,18 @@ from security_utils import generic_error_detail, safe_video_filename, stream_vid
 router = APIRouter(prefix="/api/compresor-video", tags=["compresor-video"])
 
 
+def _username(user: models.User) -> str:
+    return (getattr(user, "username", None) or getattr(user, "email", None) or "anonimo").strip()
+
+
 @router.get("/status")
 async def compresor_status(
     current_user: models.User = Depends(require_permission("compresor_video")),
 ):
+    username = _username(current_user)
     try:
-        base = await asyncio.to_thread(ensure_compresor_server)
-        data = await asyncio.to_thread(proxy_json, "GET", "/api/items")
+        base = await asyncio.to_thread(ensure_compresor_server, username)
+        data = await asyncio.to_thread(proxy_json, "GET", "/api/items", None, username=username)
         return {"running": True, "baseUrl": base, **data}
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -39,8 +44,9 @@ async def compresor_status(
 async def compresor_items(
     current_user: models.User = Depends(require_permission("compresor_video")),
 ):
+    username = _username(current_user)
     try:
-        return await asyncio.to_thread(proxy_json, "GET", "/api/items")
+        return await asyncio.to_thread(proxy_json, "GET", "/api/items", None, username=username)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     except Exception as exc:
@@ -55,19 +61,21 @@ async def compresor_upload(
     if not files:
         raise HTTPException(status_code=400, detail="Seleccione al menos un video MP4.")
 
+    username = _username(current_user)
     try:
-        INPUT_DIR.mkdir(parents=True, exist_ok=True)
+        input_dir = user_input_dir(username)
+        input_dir.mkdir(parents=True, exist_ok=True)
         saved_names: list[str] = []
         for upload in files:
             safe_name = safe_video_filename(upload.filename)
             if not safe_name.lower().endswith(".mp4"):
                 raise HTTPException(status_code=400, detail=f"Formato no soportado: {upload.filename}")
-            dest = INPUT_DIR / safe_name
+            dest = input_dir / safe_name
             stem = dest.stem
             suffix = dest.suffix
             counter = 1
             while dest.exists():
-                dest = INPUT_DIR / f"{stem}_{counter}{suffix}"
+                dest = input_dir / f"{stem}_{counter}{suffix}"
                 counter += 1
             await stream_video_upload_to_file(upload, dest, max_bytes=COMPRESOR_VIDEO_MAX_BYTES)
             saved_names.append(dest.name)
@@ -83,8 +91,9 @@ async def compresor_upload(
 async def compresor_scan(
     current_user: models.User = Depends(require_permission("compresor_video")),
 ):
+    username = _username(current_user)
     try:
-        return await asyncio.to_thread(proxy_json, "POST", "/api/scan-input", {})
+        return await asyncio.to_thread(proxy_json, "POST", "/api/scan-input", {}, username=username)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     except Exception as exc:
@@ -95,8 +104,9 @@ async def compresor_scan(
 async def compresor_clear(
     current_user: models.User = Depends(require_permission("compresor_video")),
 ):
+    username = _username(current_user)
     try:
-        return await asyncio.to_thread(clear_compresor_queue)
+        return await asyncio.to_thread(clear_compresor_queue, username)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -108,8 +118,9 @@ async def compresor_start(
     payload: dict,
     current_user: models.User = Depends(require_permission("compresor_video")),
 ):
+    username = _username(current_user)
     try:
-        return await asyncio.to_thread(proxy_json, "POST", "/api/start", payload)
+        return await asyncio.to_thread(proxy_json, "POST", "/api/start", payload, username=username)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -120,8 +131,9 @@ async def compresor_start(
 async def compresor_stop(
     current_user: models.User = Depends(require_permission("compresor_video")),
 ):
+    username = _username(current_user)
     try:
-        return await asyncio.to_thread(proxy_json, "POST", "/api/stop", {})
+        return await asyncio.to_thread(proxy_json, "POST", "/api/stop", {}, username=username)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -133,8 +145,9 @@ async def compresor_remove(
     payload: dict,
     current_user: models.User = Depends(require_permission("compresor_video")),
 ):
+    username = _username(current_user)
     try:
-        return await asyncio.to_thread(proxy_json, "POST", "/api/remove", payload)
+        return await asyncio.to_thread(proxy_json, "POST", "/api/remove", payload, username=username)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -145,8 +158,9 @@ async def compresor_remove(
 async def compresor_open_output(
     current_user: models.User = Depends(require_permission("compresor_video")),
 ):
+    username = _username(current_user)
     try:
-        return await asyncio.to_thread(proxy_json, "POST", "/api/open-output", {})
+        return await asyncio.to_thread(proxy_json, "POST", "/api/open-output", {}, username=username)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -158,8 +172,9 @@ async def compresor_download(
     zip_name: str,
     current_user: models.User = Depends(require_permission("compresor_video")),
 ):
+    username = _username(current_user)
     try:
-        path = await asyncio.to_thread(resolve_download_zip, zip_name)
+        path = await asyncio.to_thread(resolve_download_zip, zip_name, username)
         return FileResponse(
             path=str(path),
             filename=path.name,
