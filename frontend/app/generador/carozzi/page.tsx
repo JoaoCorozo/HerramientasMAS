@@ -6,6 +6,7 @@ import { AlertCircle, ArrowLeft, FileSpreadsheet, Play } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 import { apiFetch } from "@/lib/api"
+import { TemplateDownload } from "@/components/template-download"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 
@@ -134,7 +135,10 @@ export default function CarozziComparadorPage() {
 
           <div className="space-y-6 rounded-xl border border-border bg-card p-6 shadow-sm">
             <div className="space-y-2">
-              <Label htmlFor="archivo-cliente">1. Listado cliente (Excel / CSV)</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="archivo-cliente">1. Listado cliente (Excel / CSV)</Label>
+                <TemplateDownload href="/templates/carozzi-listado-cliente.csv" />
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"
@@ -160,7 +164,10 @@ export default function CarozziComparadorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="archivo-plataforma">2. Nómina plataforma (CSV)</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="archivo-plataforma">2. Nómina plataforma (CSV)</Label>
+                <TemplateDownload href="/templates/carozzi-nomina-plataforma.csv" />
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"

@@ -6,6 +6,7 @@ import { AlertCircle, ArrowLeft, FileSpreadsheet, Play } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 import { apiFetch } from "@/lib/api"
+import { TemplateDownload } from "@/components/template-download"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 
@@ -132,7 +133,10 @@ export default function EminConsolidarCambiosPage() {
 
           <div className="space-y-6 rounded-xl border border-border bg-card p-6 shadow-sm">
             <div className="space-y-2">
-              <Label htmlFor="archivo-antigua">1. Nómina antigua (base previa)</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="archivo-antigua">1. Nómina antigua (base previa)</Label>
+                <TemplateDownload href="/templates/emin-nomina.csv" />
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"
@@ -158,7 +162,10 @@ export default function EminConsolidarCambiosPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="archivo-nueva">2. Nómina nueva (versión actualizada)</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="archivo-nueva">2. Nómina nueva (versión actualizada)</Label>
+                <TemplateDownload href="/templates/emin-nomina.csv" />
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"

@@ -6,6 +6,7 @@ import { AlertCircle, ArrowLeft, FileSpreadsheet, Play } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
 import { apiFetch } from "@/lib/api"
+import { TemplateDownload } from "@/components/template-download"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import {
@@ -219,7 +220,10 @@ export default function EminComparadorPage() {
 
           <div className="space-y-6 rounded-xl border border-border bg-card p-6 shadow-sm">
             <div className="space-y-2">
-              <Label htmlFor="archivo-cliente">1. Nómina cliente (Excel / CSV)</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="archivo-cliente">1. Nómina cliente (Excel / CSV)</Label>
+                <TemplateDownload href="/templates/emin-nomina.csv" />
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"
@@ -245,7 +249,10 @@ export default function EminComparadorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="archivo-corregida">2. Nómina corregida (Excel / CSV)</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="archivo-corregida">2. Nómina corregida (Excel / CSV)</Label>
+                <TemplateDownload href="/templates/emin-nomina.csv" />
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"
@@ -271,9 +278,12 @@ export default function EminComparadorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="archivo-analizador">
-                3. Analizador plataforma (opcional · Fila / Columna / Error)
-              </Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="archivo-analizador">
+                  3. Analizador plataforma (opcional · Fila / Columna / Error)
+                </Label>
+                <TemplateDownload href="/templates/emin-analizador.csv" />
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"

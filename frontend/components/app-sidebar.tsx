@@ -16,6 +16,7 @@ import {
   Shield,
   ClipboardList,
   ChartColumn,
+  GitCompare,
 } from "lucide-react"
 import { ThemeSettings } from "@/components/theme-settings"
 import { GeneradorNominaMenu } from "@/components/generador-nomina-menu"
@@ -32,6 +33,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { icon: Database, label: "Comparador de Datos", href: "/", moduleName: "comparador" },
+  { icon: GitCompare, label: "Comparador Default", href: "/comparador-default", moduleName: "comparador" },
   { icon: FileText, label: "Normalizador RUT", href: "/rut", moduleName: "rut" },
   { icon: Type, label: "Normalizador Textos", href: "/textos", moduleName: "textos" },
   { icon: GraduationCap, label: "Capacitaciones Mod 1", href: "/capacitaciones", moduleName: "capacitaciones" },

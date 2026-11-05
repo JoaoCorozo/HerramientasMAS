@@ -1623,12 +1623,14 @@ from aza_routes import router as aza_router
 from resiter_routes import router as resiter_router
 from carozzi_routes import router as carozzi_router
 from emin_routes import router as emin_router
+from comparador_default_routes import router as comparador_default_router
 
 app.include_router(transelec_router)
 app.include_router(aza_router)
 app.include_router(resiter_router)
 app.include_router(carozzi_router)
 app.include_router(emin_router)
+app.include_router(comparador_default_router)
 
 from compresor_routes import router as compresor_router
 from analisis_resultados_routes import router as analisis_resultados_router
