@@ -498,13 +498,24 @@ async def oidc_login(tenant: str = "lms"):
     if not config.OIDC_ENABLED:
         raise HTTPException(status_code=503, detail="SSO no configurado")
     try:
-        url, _state = await oidc_client.build_authorize_url(tenant)
+        state, _verifier, ticket = oidc_client.create_login_ticket(tenant)
+        url = await oidc_client.build_authorize_url(tenant, _verifier, state)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Error iniciando OIDC (%s)", tenant)
         raise HTTPException(status_code=502, detail="No se pudo contactar Authentik") from exc
-    return RedirectResponse(url=url, status_code=302)
+    response = RedirectResponse(url=url, status_code=302)
+    response.set_cookie(
+        key=oidc_client.OIDC_LOGIN_COOKIE,
+        value=ticket,
+        httponly=True,
+        secure=config.COOKIE_SECURE,
+        samesite=config.COOKIE_SAMESITE,
+        max_age=600,
+        path="/",
+    )
+    return response
 
 
 @app.get("/api/auth/oidc/callback")
@@ -523,10 +534,12 @@ async def oidc_callback(
     def fail(msg: str) -> RedirectResponse:
         from urllib.parse import quote
 
-        return RedirectResponse(
+        response = RedirectResponse(
             url=f"{frontend}/login?sso_error={quote(msg)}",
             status_code=302,
         )
+        response.delete_cookie(oidc_client.OIDC_LOGIN_COOKIE, path="/")
+        return response
 
     if error:
         return fail(error_description or error)
@@ -534,9 +547,12 @@ async def oidc_callback(
         return fail("Respuesta OIDC incompleta")
 
     try:
-        state_data = oidc_client.parse_oidc_state(state)
+        state_data = oidc_client.parse_login_ticket(
+            request.cookies.get(oidc_client.OIDC_LOGIN_COOKIE) or "",
+            state,
+        )
         tenant = state_data["tenant"]
-        exchanged = await oidc_client.exchange_code(tenant, code)
+        exchanged = await oidc_client.exchange_code(tenant, code, state_data["verifier"])
     except Exception as exc:
         logger.exception("OIDC callback falló")
         return fail(str(exc) or "Error en SSO")
@@ -605,6 +621,7 @@ async def oidc_callback(
     access_token = auth.create_access_token(data={"sub": user.username})
     response = RedirectResponse(url=f"{frontend}/", status_code=302)
     set_auth_cookie(response, access_token)
+    response.delete_cookie(oidc_client.OIDC_LOGIN_COOKIE, path="/")
     return response
 
 

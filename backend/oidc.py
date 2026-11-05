@@ -1,6 +1,7 @@
-"""Cliente OIDC (Authentik) — Authorization Code + PKCE-ready state firmado."""
+"""Cliente OIDC (Authentik) — Authorization Code + PKCE, igual que Netbird."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import logging
 import secrets
@@ -19,6 +20,8 @@ logger = logging.getLogger("uvicorn.error")
 
 _discovery_cache: dict[str, tuple[float, dict]] = {}
 _DISCOVERY_TTL = 3600
+OIDC_LOGIN_COOKIE = "oidc_pkce"
+_LOGIN_TTL = 600
 
 
 def username_from_email(email: str) -> str:
@@ -30,22 +33,34 @@ def username_from_email(email: str) -> str:
     return f"{local}_{digest}"[:50]
 
 
-def create_oidc_state(tenant: str) -> str:
+def pkce_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def create_login_ticket(tenant: str) -> tuple[str, str, str]:
+    """state corto para la URL, verifier PKCE y cookie firmada (tenant + verifier)."""
+    state = secrets.token_urlsafe(18)
+    verifier = secrets.token_urlsafe(48)
     payload = {
         "tenant": tenant,
-        "nonce": secrets.token_urlsafe(16),
-        "exp": int(time.time()) + 600,
-        "typ": "oidc_state",
+        "state": state,
+        "verifier": verifier,
+        "exp": int(time.time()) + _LOGIN_TTL,
+        "typ": "oidc_login",
     }
-    return jwt.encode(payload, config.JWT_SECRET_KEY, algorithm=auth.ALGORITHM)
+    cookie = jwt.encode(payload, config.JWT_SECRET_KEY, algorithm=auth.ALGORITHM)
+    return state, verifier, cookie
 
 
-def parse_oidc_state(state: str) -> dict[str, Any]:
+def parse_login_ticket(cookie: str, state: str) -> dict[str, Any]:
     try:
-        payload = jwt.decode(state, config.JWT_SECRET_KEY, algorithms=[auth.ALGORITHM])
+        payload = jwt.decode(cookie, config.JWT_SECRET_KEY, algorithms=[auth.ALGORITHM])
     except jwt.PyJWTError as exc:
         raise ValueError("state OIDC inválido o expirado") from exc
-    if payload.get("typ") != "oidc_state" or not payload.get("tenant"):
+    if payload.get("typ") != "oidc_login" or not payload.get("tenant"):
+        raise ValueError("state OIDC inválido")
+    if not payload.get("verifier") or payload.get("state") != state:
         raise ValueError("state OIDC inválido")
     return payload
 
@@ -65,7 +80,7 @@ async def fetch_discovery(issuer: str) -> dict:
     return data
 
 
-async def build_authorize_url(tenant: str) -> tuple[str, str]:
+async def build_authorize_url(tenant: str, code_verifier: str, state: str) -> str:
     cfg = config.oidc_tenant_config(tenant)
     if not cfg:
         raise ValueError(f"Tenant OIDC no configurado: {tenant}")
@@ -73,18 +88,20 @@ async def build_authorize_url(tenant: str) -> tuple[str, str]:
     authorize = discovery.get("authorization_endpoint")
     if not authorize:
         raise ValueError("Authentik no publicó authorization_endpoint")
-    state = create_oidc_state(tenant)
+    # Misma forma que Netbird: PKCE S256 y state corto. Authentik arma el `next`.
     params = {
-        "response_type": "code",
         "client_id": cfg["client_id"],
+        "code_challenge": pkce_challenge(code_verifier),
+        "code_challenge_method": "S256",
         "redirect_uri": cfg["redirect_uri"],
+        "response_type": "code",
         "scope": cfg["scopes"],
         "state": state,
     }
-    return f"{authorize}?{urlencode(params)}", state
+    return f"{authorize}?{urlencode(params)}"
 
 
-async def exchange_code(tenant: str, code: str) -> dict[str, Any]:
+async def exchange_code(tenant: str, code: str, code_verifier: str) -> dict[str, Any]:
     cfg = config.oidc_tenant_config(tenant)
     if not cfg:
         raise ValueError(f"Tenant OIDC no configurado: {tenant}")
@@ -98,6 +115,7 @@ async def exchange_code(tenant: str, code: str) -> dict[str, Any]:
         "redirect_uri": cfg["redirect_uri"],
         "client_id": cfg["client_id"],
         "client_secret": cfg["client_secret"],
+        "code_verifier": code_verifier,
     }
     async with httpx.AsyncClient(timeout=20.0) as client:
         resp = await client.post(token_url, data=data)
