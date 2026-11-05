@@ -840,36 +840,21 @@ def delete_user(user_id: int, current_user: models.User = Depends(get_current_us
 class RutInput(BaseModel):
     ruts: str
     formato: str
-    k_minuscula: bool
+    k_minuscula: bool = False
+    generar_dv: bool = False  # listado sin dígito → calcularlo
+    validar: bool = True  # verificar DV con módulo 11
 
 @app.post("/api/rut/normalizar")
 def normalizar_rut(data: RutInput, current_user: models.User = Depends(require_permission("rut"))):
-    ruts_limpios = data.ruts.replace("'", "").replace('"', "").replace('\r', '')
-    lista_ruts = [r.strip() for r in ruts_limpios.split('\n') if r.strip()]
-    
-    resultados = []
-    for rut in lista_ruts:
-        rut_base = rut.upper().replace(".", "")
-        if "-" not in rut_base and len(rut_base) > 1:
-            rut_base = rut_base[:-1] + "-" + rut_base[-1]
-            
-        partes = rut_base.split("-")
-        if len(partes) != 2:
-            resultados.append(rut)
-            continue
-            
-        cuerpo, dv = partes[0], partes[1]
-        if data.k_minuscula and dv == 'K': dv = 'k'
-            
-        if data.formato == "Sin Puntos y Con Guión":
-            resultados.append(f"{cuerpo}-{dv}")
-        elif data.formato == "Sin Puntos y Sin Guión":
-            resultados.append(f"{cuerpo}{dv}")
-        else:
-            cuerpo_puntos = f"{int(cuerpo):,}".replace(",", ".") if cuerpo.isdigit() else cuerpo
-            resultados.append(f"{cuerpo_puntos}-{dv}")
-            
-    return {"ruts": "\n".join(resultados), "total": len(resultados)}
+    from rut_utils import normalizar_lista
+
+    return normalizar_lista(
+        data.ruts,
+        formato=data.formato,
+        k_minuscula=data.k_minuscula,
+        generar_dv=bool(getattr(data, "generar_dv", False)),
+        validar=bool(getattr(data, "validar", True)),
+    )
 
 
 # === RUTAS PARA NORMALIZADOR DE NOMBRES ===

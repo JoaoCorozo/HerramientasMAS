@@ -14,7 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 type MallaOpt = { tipousuario: string; malla: string }
 
 type PersonaForm = {
-  nombre: string
+  firstname: string
+  lastname: string
   rut: string
   correo: string
   empresa: string
@@ -42,7 +43,8 @@ const DEFAULT_MALLAS: MallaOpt[] = [
 ]
 
 const emptyPersona = (): PersonaForm => ({
-  nombre: "",
+  firstname: "",
+  lastname: "",
   rut: "",
   correo: "",
   empresa: "",
@@ -138,8 +140,8 @@ export default function AzaAltasPage() {
     try {
       for (let i = 0; i < personas.length; i++) {
         const p = personas[i]
-        if (!p.nombre.trim() || !p.rut.trim() || !p.correo.trim()) {
-          throw new Error(`Fila ${i + 1}: completa nombre, RUT y correo.`)
+        if (!p.firstname.trim() || !p.lastname.trim() || !p.rut.trim() || !p.correo.trim()) {
+          throw new Error(`Fila ${i + 1}: completa nombre, apellido, RUT y correo.`)
         }
         if (!p.empresa.trim() || !p.malla.trim() || !p.tipousuario.trim()) {
           throw new Error(
@@ -267,12 +269,20 @@ export default function AzaAltasPage() {
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2 sm:col-span-2">
-                      <Label>Nombre completo</Label>
+                    <div className="space-y-2">
+                      <Label>Nombre (firstname)</Label>
                       <Input
-                        value={p.nombre}
-                        onChange={(e) => updatePersona(index, { nombre: e.target.value })}
-                        placeholder="Bastián Ovalle Ortiz"
+                        value={p.firstname}
+                        onChange={(e) => updatePersona(index, { firstname: e.target.value })}
+                        placeholder="Bastián"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Apellido (lastname)</Label>
+                      <Input
+                        value={p.lastname}
+                        onChange={(e) => updatePersona(index, { lastname: e.target.value })}
+                        placeholder="Ovalle Ortiz"
                       />
                     </div>
                     <div className="space-y-2">

@@ -36,8 +36,8 @@ class AzaAltaPersona(BaseModel):
     empresa: str = ""
     malla: str = ""
     tipousuario: str = ""
-    firstname: str | None = None
-    lastname: str | None = None
+    firstname: str = ""
+    lastname: str = ""
 
 
 class AzaAltasRequest(BaseModel):

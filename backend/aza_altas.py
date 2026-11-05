@@ -63,7 +63,7 @@ def separar_nombre(nombre_completo: str) -> tuple[str, str]:
 
 def construir_fila(
     *,
-    nombre: str,
+    nombre: str = "",
     rut: str,
     correo: str,
     empresa: str,
@@ -86,13 +86,15 @@ def construir_fila(
         raise ValueError("Tipo de usuario es obligatorio (relleno manual)")
 
     address = formatear_rut_con_puntos(rut)
-    if firstname is not None and str(firstname).strip():
-        fn = str(firstname).strip()
-        ln = str(lastname or "").strip()
-    else:
+    fn = str(firstname or "").strip()
+    ln = str(lastname or "").strip()
+    # Compatibilidad: si no vienen separados, intentar partir "nombre"
+    if not fn and nombre:
         fn, ln = separar_nombre(nombre)
     if not fn:
-        raise ValueError("Nombre / firstname obligatorio")
+        raise ValueError("Nombre (firstname) es obligatorio")
+    if not ln:
+        raise ValueError("Apellido (lastname) es obligatorio")
 
     return {
         "address": address,
@@ -111,6 +113,27 @@ def construir_fila(
     }
 
 
+def _slug_correo_archivo(email: str) -> str:
+    """Correo usable en nombre de archivo (sin caracteres problemáticos)."""
+    s = str(email or "").strip().lower()
+    s = s.replace("@", "_")
+    s = re.sub(r"[^a-z0-9._+-]+", "_", s)
+    s = re.sub(r"_+", "_", s).strip("._")
+    return s or "usuario"
+
+
+def nombre_archivo_alta(filas: list[dict[str, str]]) -> str:
+    """
+    1 usuario  → alta_aza_<correo>_YYYYMMDD.csv
+    2+ usuarios → alta_aza_YYYYMMDD.csv
+    """
+    fecha = datetime.now().strftime("%Y%m%d")
+    if len(filas) == 1:
+        correo = _slug_correo_archivo(filas[0].get("email") or filas[0].get("username") or "")
+        return f"alta_aza_{correo}_{fecha}.csv"
+    return f"alta_aza_{fecha}.csv"
+
+
 def generar_csv_bytes(filas: list[dict[str, str]]) -> tuple[bytes, str]:
     if not filas:
         raise ValueError("No hay filas para generar")
@@ -127,9 +150,7 @@ def generar_csv_bytes(filas: list[dict[str, str]]) -> tuple[bytes, str]:
         writer.writerow({h: fila.get(h, "") for h in CSV_HEADERS})
     # UTF-8 con BOM (Excel / Moodle)
     content = ("\ufeff" + buf.getvalue()).encode("utf-8")
-    year = datetime.now().strftime("%Y")
-    filename = f"ALTAS_AZA_{year}.csv"
-    return content, filename
+    return content, nombre_archivo_alta(filas)
 
 
 def preview_transformacion(payload: dict[str, Any]) -> dict[str, Any]:
