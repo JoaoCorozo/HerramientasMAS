@@ -40,7 +40,10 @@ export const GENERADOR_NAV_CLIENTES: GeneradorNavCliente[] = [
     id: "aza",
     nombre: "AZA",
     disponible: true,
-    procesos: [{ label: "Comparar nóminas", href: "/generador/aza" }],
+    procesos: [
+      { label: "Altas de usuarios", href: "/generador/aza/altas" },
+      { label: "Comparar nóminas", href: "/generador/aza/comparar" },
+    ],
   },
   {
     id: "resiter",
@@ -97,7 +100,7 @@ export const GENERADOR_CLIENTES: GeneradorCliente[] = [
     id: "aza",
     nombre: "AZA",
     descripcion:
-      "Comparador de nóminas cliente vs plataforma (entrada CSV). Descarga Excel con 6 hojas (Diferencias, Ingresos, Salidas, Actualizaciones, Nuevos y Suspender).",
+      "Altas CSV Moodle (nombre/RUT/correo + empresa/malla/tipo manual) y comparador de nóminas cliente vs plataforma.",
     href: "/generador/aza",
     disponible: true,
   },

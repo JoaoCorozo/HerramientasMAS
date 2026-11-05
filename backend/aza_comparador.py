@@ -78,6 +78,7 @@ NOMBRE_MALLA_OFICIAL: dict[str, str] = {
     "4": "Filiales Comercial",
     "5": "Aza Lideres Operación / Ingenieros / Trainee",
     "6": "EcoAZA",
+    "7": "Prof / Adm / Lideres Transversales AZA",
 }
 
 # Reglas de migración: (número legacy, alias de nombre, destino número + nombre oficial).

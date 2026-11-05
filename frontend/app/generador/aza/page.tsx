@@ -1,110 +1,35 @@
 "use client"
 
-import { useRef, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, ArrowLeft, FileSpreadsheet, Play } from "lucide-react"
+import { ArrowLeft, FileSpreadsheet, UserPlus } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { useAuth } from "@/components/auth-provider"
-import { apiFetch } from "@/lib/api"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 
-interface ReportStats {
-  diferencias: number
-  ingresos: number
-  salidas: number
-  migraciones_malla?: number
-}
+const PROCESOS = [
+  {
+    href: "/generador/aza/altas",
+    title: "Altas de usuarios",
+    description:
+      "Ingresa nombre, RUT y correo; completa empresa, malla y tipo de usuario a mano; descarga el CSV ALTAS_AZA (formato Moodle).",
+    icon: UserPlus,
+  },
+  {
+    href: "/generador/aza/comparar",
+    title: "Comparar nóminas",
+    description:
+      "Compara nómina cliente vs plataforma (CSV) y descarga Excel con diferencias, ingresos, salidas y migraciones de malla.",
+    icon: FileSpreadsheet,
+  },
+]
 
-export default function AzaComparadorPage() {
+export default function AzaHubPage() {
   useAuth()
-
-  const [archivoCliente, setArchivoCliente] = useState<File | null>(null)
-  const [archivoPlataforma, setArchivoPlataforma] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [errorMsg, setErrorMsg] = useState("")
-  const [successMsg, setSuccessMsg] = useState("")
-  const clienteRef = useRef<HTMLInputElement>(null)
-  const plataformaRef = useRef<HTMLInputElement>(null)
-
-  const esCsv = (file: File) => file.name.toLowerCase().endsWith(".csv")
-
-  const handleComparar = async () => {
-    if (!archivoCliente || !archivoPlataforma) {
-      setErrorMsg("Selecciona la nómina del cliente y la de la plataforma.")
-      return
-    }
-    if (!esCsv(archivoCliente) || !esCsv(archivoPlataforma)) {
-      setErrorMsg("Ambos archivos deben ser CSV (.csv).")
-      return
-    }
-
-    setLoading(true)
-    setErrorMsg("")
-    setSuccessMsg("")
-
-    try {
-      const formData = new FormData()
-      formData.append("archivo_cliente", archivoCliente)
-      formData.append("archivo_plataforma", archivoPlataforma)
-
-      const response = await apiFetch("/api/generador/aza/comparar", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}))
-        throw new Error(err.detail || "Error al comparar las nóminas.")
-      }
-
-      const statsHeader = response.headers.get("X-Report-Stats")
-      let stats: ReportStats | null = null
-      if (statsHeader) {
-        try {
-          stats = JSON.parse(statsHeader) as ReportStats
-        } catch {
-          stats = null
-        }
-      }
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      const contentDisposition = response.headers.get("content-disposition")
-      let filename = "Reporte_AZA.xlsx"
-      if (contentDisposition?.includes("filename=")) {
-        filename = contentDisposition.split("filename=")[1].replace(/"/g, "")
-      }
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      window.URL.revokeObjectURL(url)
-
-      if (stats) {
-        const mig = stats.migraciones_malla ?? 0
-        setSuccessMsg(
-          `Reporte generado: ${stats.diferencias} modificaciones, ${stats.ingresos} nuevos, ${stats.salidas} bajas` +
-            (mig > 0 ? `, ${mig} migraciones de malla.` : ".")
-        )
-      } else {
-        setSuccessMsg("Reporte Excel descargado correctamente.")
-      }
-    } catch (e: unknown) {
-      setErrorMsg(e instanceof Error ? e.message : "Error inesperado.")
-    } finally {
-      setLoading(false)
-    }
-  }
 
   return (
     <div className="flex h-screen bg-background">
       <AppSidebar />
-
       <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl min-w-0 px-8 py-8">
+        <div className="mx-auto max-w-4xl min-w-0 px-8 py-8">
           <Link
             href="/generador"
             className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary"
@@ -115,92 +40,31 @@ export default function AzaComparadorPage() {
 
           <header className="mb-8">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Generador de Cargas · AZA
+              Generador de Cargas
             </p>
-            <h1 className="text-2xl font-semibold text-foreground">Comparar nóminas</h1>
+            <h1 className="text-2xl font-semibold text-foreground">AZA</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Sube las nóminas en formato CSV (cliente y plataforma). El resultado se descarga como
-              Excel con 6 hojas: DIFERENCIAS, INGRESOS, SALIDAS, Actualizaciones, Nuevos y Suspender.
-              Las mallas obsoletas en plataforma (ej. Malla 2 AZA 2024, Malla 8 EcoAza) se migran
-              automáticamente al nuevo número y nombre en Actualizaciones.
+              Elige el proceso de nóminas que necesitas ejecutar.
             </p>
           </header>
 
-          <div className="space-y-6 rounded-xl border border-border bg-card p-6 shadow-sm">
-            <div className="space-y-2">
-              <Label htmlFor="archivo-cliente">1. Nómina cliente (CSV)</Label>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => clienteRef.current?.click()}
-                >
-                  <FileSpreadsheet className="h-4 w-4" />
-                  Seleccionar archivo
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  {archivoCliente ? archivoCliente.name : "Ningún archivo seleccionado"}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {PROCESOS.map((p) => (
+              <Link
+                key={p.href}
+                href={p.href}
+                className="group rounded-xl border border-border bg-card p-6 shadow-sm transition-all hover:border-primary/50 hover:shadow-md"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10">
+                  <p.icon className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="mt-4 text-lg font-semibold text-foreground">{p.title}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{p.description}</p>
+                <span className="mt-4 inline-block text-sm font-medium text-primary group-hover:underline">
+                  Abrir →
                 </span>
-                <input
-                  ref={clienteRef}
-                  id="archivo-cliente"
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="hidden"
-                  onChange={(e) => setArchivoCliente(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="archivo-plataforma">2. Nómina plataforma / sistema (CSV)</Label>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => plataformaRef.current?.click()}
-                >
-                  <FileSpreadsheet className="h-4 w-4" />
-                  Seleccionar archivo
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  {archivoPlataforma ? archivoPlataforma.name : "Ningún archivo seleccionado"}
-                </span>
-                <input
-                  ref={plataformaRef}
-                  id="archivo-plataforma"
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="hidden"
-                  onChange={(e) => setArchivoPlataforma(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </div>
-
-            {errorMsg && (
-              <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{errorMsg}</span>
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
-                {successMsg}
-              </div>
-            )}
-
-            <Button
-              type="button"
-              className="gap-2"
-              disabled={loading || !archivoCliente || !archivoPlataforma}
-              onClick={handleComparar}
-            >
-              <Play className="h-4 w-4" />
-              {loading ? "Comparando…" : "Ejecutar comparación y descargar Excel"}
-            </Button>
+              </Link>
+            ))}
           </div>
         </div>
       </main>

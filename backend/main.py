@@ -397,6 +397,12 @@ def startup_event():
         ensure_transelec_seeded(db)
     except Exception as e:
         logger.warning("No se pudo inicializar catálogo Transelec: %s", e)
+    try:
+        from aza_db import ensure_aza_seeded
+
+        ensure_aza_seeded(db)
+    except Exception as e:
+        logger.warning("No se pudo inicializar catálogo AZA: %s", e)
     finally:
         db.close()
     asyncio.create_task(dispatcher_background_loop())
