@@ -115,7 +115,8 @@ location / {
 
 Ajusta `PUBLIC_FRONTEND_URL` / `CORS_ORIGINS` a `https://tu-dominio.com`.
 
-Para activar MCP: en `.env` pon `MCP_ENABLED=true` y `MCP_API_KEY=<secreto>`, rebuild del backend, y en Grok Bot agrega el servidor custom en `https://tu-dominio.com/mcp/` con Bearer.
+Para activar MCP (pasos completos para TI): ver **`docs/INSTRUCCIONES_MCP_GROK_BOT.md`**.
+Resumen: `MCP_ENABLED=true` + `MCP_API_KEY`, rebuild backend, proxy HTTPS **público** a `/mcp/` (Netbird no alcanza para Grok Bot).
 
 ## 6. Comandos útiles
 

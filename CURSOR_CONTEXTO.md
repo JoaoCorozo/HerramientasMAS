@@ -94,12 +94,10 @@ En local, `frontend/lib/api.ts` usa rutas relativas `/api/...`. Next reescribe a
 Deploy Docker: `DEPLOY_DOCKER.md`. Deploy Vercel+Render+Neon: `DEPLOY_NUBE.md`.
 
 ### MCP / Grok Bot
+- Instrucciones para TI: `docs/INSTRUCCIONES_MCP_GROK_BOT.md`
 - Código: `backend/mcp_server.py` montado en FastAPI en `/mcp/` si `MCP_ENABLED=true` + `MCP_API_KEY`.
 - Auth: header `Authorization: Bearer <MCP_API_KEY>`.
-- Grok Bot solo alcanza **HTTPS público** (no `localhost` ni Netbird/VPN). Nginx debe proxy `/mcp/` al backend.
-- En el chat de Grok Bot:  
-  `Add a custom MCP server called plataforma-lms at https://TU-DOMINIO/mcp/`  
-  y luego indicar el Bearer con la API key.
+- Grok Bot solo alcanza **HTTPS público** (no `localhost` ni Netbird/VPN).
 
 ---
 
