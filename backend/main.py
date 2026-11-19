@@ -12,6 +12,7 @@ import shutil
 import tempfile
 import zipfile
 import unicodedata
+from contextlib import asynccontextmanager
 from datetime import datetime
 import openpyxl
 import asyncio
@@ -25,6 +26,7 @@ import models
 import auth
 import config
 from deps import get_current_user, require_permission, check_login_rate_limit
+from mcp_server import create_mcp_http_app, mcp_enabled
 from security_utils import (
     safe_upload_filename,
     safe_planilla_filename,
@@ -44,11 +46,34 @@ try:
 except Exception as _schema_exc:
     logging.getLogger("uvicorn.error").warning("No se pudo migrar schema users: %s", _schema_exc)
 
+_mcp_asgi = None
+if mcp_enabled():
+    try:
+        _mcp_asgi = create_mcp_http_app()
+    except Exception as _mcp_exc:
+        logging.getLogger("uvicorn.error").error("MCP deshabilitado: %s", _mcp_exc)
+        _mcp_asgi = None
+
+
+@asynccontextmanager
+async def _app_lifespan(app: FastAPI):
+    if _mcp_asgi is not None:
+        async with _mcp_asgi.lifespan(app):
+            yield
+    else:
+        yield
+
+
 app = FastAPI(
     title="Herramientas API",
     docs_url=None if config.IS_PRODUCTION else "/docs",
     redoc_url=None if config.IS_PRODUCTION else "/redoc",
+    lifespan=_app_lifespan,
 )
+
+if _mcp_asgi is not None:
+    app.mount("/mcp", _mcp_asgi)
+    logging.getLogger("uvicorn.error").info("MCP montado en /mcp/ (Grok Bot / Streamable HTTP)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -432,6 +457,8 @@ def health_check():
         "database": "configured" if config.SQLALCHEMY_DATABASE_URL else "missing",
         "database_dialect": dialect,
         "matriz_cursos": bool(resolve_matriz_cursos_path()),
+        "mcp_enabled": bool(_mcp_asgi is not None),
+        "mcp_path": "/mcp/" if _mcp_asgi is not None else None,
     }
 
 

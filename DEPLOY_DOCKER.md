@@ -92,6 +92,17 @@ Delante de Docker (Nginx, Caddy, Traefik) apunta el dominio al puerto del **fron
 Ejemplo Nginx:
 
 ```nginx
+# MCP (Grok Bot) → backend directo. Debe ser HTTPS público, no solo VPN.
+location /mcp/ {
+  proxy_pass http://127.0.0.1:8000/mcp/;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_set_header Authorization $http_authorization;
+  proxy_buffering off;
+}
+
 location / {
   proxy_pass http://127.0.0.1:3000;
   proxy_http_version 1.1;
@@ -103,6 +114,8 @@ location / {
 ```
 
 Ajusta `PUBLIC_FRONTEND_URL` / `CORS_ORIGINS` a `https://tu-dominio.com`.
+
+Para activar MCP: en `.env` pon `MCP_ENABLED=true` y `MCP_API_KEY=<secreto>`, rebuild del backend, y en Grok Bot agrega el servidor custom en `https://tu-dominio.com/mcp/` con Bearer.
 
 ## 6. Comandos útiles
 

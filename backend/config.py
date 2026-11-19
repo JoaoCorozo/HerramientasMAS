@@ -174,3 +174,9 @@ def oidc_configured_tenants() -> list[dict]:
 
 
 OIDC_ENABLED = bool(oidc_configured_tenants())
+
+# --- MCP remoto (Grok Bot / clientes Streamable HTTP) ---
+# Endpoint: /mcp/  Header: Authorization: Bearer <MCP_API_KEY>
+# La URL debe ser HTTPS pública (Grok Bot no alcanza localhost ni VPN privada).
+MCP_ENABLED = os.getenv("MCP_ENABLED", "").lower() in ("1", "true", "yes")
+MCP_API_KEY = (os.getenv("MCP_API_KEY") or "").strip()
